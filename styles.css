@@ -800,6 +800,19 @@ textarea {
   font-size: 11px;
 }
 
+.exported-claim-badge {
+  display: inline-flex;
+  width: fit-content;
+  border: 1px solid #9bbf9b;
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  margin-top: 8px;
+  color: #2f6f3d;
+  background: #f0fbf2;
+  font-size: 11px;
+  font-weight: 500;
+}
+
 .audit-trail {
   border-top: 1px solid var(--border);
   margin-top: 10px;
