@@ -45,6 +45,7 @@ const claimPrecheck = document.querySelector("#claimPrecheck");
 const applyLastClaimButton = document.querySelector("#applyLastClaimButton");
 const lastClaimHint = document.querySelector("#lastClaimHint");
 const vendorSuggestion = document.querySelector("#vendorSuggestion");
+const expenseDateMonthHint = document.querySelector("#expenseDateMonthHint");
 const highAmountReasonField = document.querySelector("#highAmountReasonField");
 const workflowCommentDialog = document.querySelector("#workflowCommentDialog");
 const workflowCommentForm = document.querySelector("#workflowCommentForm");
@@ -80,6 +81,7 @@ let pendingClaimId = "";
 let notificationsCache = [];
 let auditLogCache = new Map();
 let exportedClaimCache = new Map();
+let closeStatusCache = new Map();
 
 document.querySelector("#refreshButton").addEventListener("click", refreshAll);
 claimForm.addEventListener("submit", submitClaim);
@@ -1995,6 +1997,7 @@ function fillFormFromReceipt(data) {
     : data.vendor || "";
   setField("title", title);
   suggestMissingClaimFields();
+  updateExpenseDateMonthHint(data.expenseDate);
 }
 
 function setField(name, value) {
@@ -2007,6 +2010,9 @@ function handleClaimFormInput(event) {
   if (!event.target?.name) return;
   if (["vendor", "amount", "expenseDate", "purpose", "paymentMethod"].includes(event.target.name)) {
     suggestMissingClaimFields();
+  }
+  if (event.target.name === "expenseDate") {
+    updateExpenseDateMonthHint(event.target.value);
   }
 }
 
@@ -2136,12 +2142,58 @@ function clearVendorSuggestion() {
   vendorSuggestion.textContent = "";
 }
 
+async function getCloseStatusForExpenseDate(expenseDate) {
+  const fiscalMonth = fiscalMonthFromExpenseDate(expenseDate);
+  if (!fiscalMonth) return null;
+  if (closeStatusCache.has(fiscalMonth)) return closeStatusCache.get(fiscalMonth);
+
+  const { data, error } = await supabase
+    .schema("finance")
+    .from("monthly_expense_close_status")
+    .select("fiscal_month,close_status,closed_at,closed_by_name,total_claim_count,total_amount")
+    .eq("fiscal_month", fiscalMonth)
+    .maybeSingle();
+
+  if (error) {
+    console.warn(error);
+    closeStatusCache.set(fiscalMonth, null);
+    return null;
+  }
+
+  closeStatusCache.set(fiscalMonth, data || null);
+  return data || null;
+}
+
+async function updateExpenseDateMonthHint(expenseDate) {
+  if (!expenseDateMonthHint) return;
+  const fiscalMonth = fiscalMonthFromExpenseDate(expenseDate);
+  if (!fiscalMonth) {
+    expenseDateMonthHint.hidden = true;
+    expenseDateMonthHint.textContent = "";
+    return;
+  }
+
+  const closeStatus = await getCloseStatusForExpenseDate(expenseDate);
+  if (closeStatus?.close_status === "closed") {
+    expenseDateMonthHint.hidden = false;
+    expenseDateMonthHint.textContent = `${formatMonth(fiscalMonth)} は月次締め済みです。この明細は締め後追加精算として扱われます。`;
+    return;
+  }
+
+  expenseDateMonthHint.hidden = true;
+  expenseDateMonthHint.textContent = "";
+}
+
 async function submitClaim(event) {
   event.preventDefault();
   const fd = new FormData(claimForm);
   const precheck = validateClaimBeforeSubmit(fd);
   const duplicateWarnings = await findPossibleDuplicateClaims(fd);
   precheck.warnings.push(...duplicateWarnings);
+  const closeStatus = await getCloseStatusForExpenseDate(fd.get("expenseDate"));
+  if (closeStatus?.close_status === "closed") {
+    precheck.warnings.push(`${formatMonth(closeStatus.fiscal_month)} は月次締め済みです。この明細は締め後追加精算として保存されます。`);
+  }
 
   renderClaimPrecheck(precheck);
 

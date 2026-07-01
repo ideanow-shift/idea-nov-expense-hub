@@ -728,6 +728,11 @@ button:disabled {
   min-height: 38px;
 }
 
+.claim-form-compact .month-close-hint {
+  grid-column: span 2;
+  align-self: end;
+}
+
 .claim-form-compact .ocr-details {
   grid-column: span 2;
   align-self: stretch;

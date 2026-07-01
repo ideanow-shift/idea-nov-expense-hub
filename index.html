@@ -124,6 +124,7 @@
             <textarea id="ocrText" name="ocrText" rows="3" placeholder="画像OCRが不安な場合だけ、レシート文字を貼り付け"></textarea>
           </details>
           <label>日付<input name="expenseDate" type="date" required /></label>
+          <div id="expenseDateMonthHint" class="field-suggestion month-close-hint" hidden></div>
           <label>金額<input name="amount" type="number" min="1" required /></label>
           <label>消費税<input name="tax" type="number" min="0" value="0" /></label>
           <label>店名<input name="vendor" type="text" /></label>
