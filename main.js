@@ -13,6 +13,7 @@ const exportCsvButton = document.querySelector("#exportCsvButton");
 const csvFormatFilter = document.querySelector("#csvFormatFilter");
 const csvStatusFilter = document.querySelector("#csvStatusFilter");
 const csvScopeFilter = document.querySelector("#csvScopeFilter");
+const includeExportedCsvRows = document.querySelector("#includeExportedCsvRows");
 const accountingExportHistory = document.querySelector("#accountingExportHistory");
 const claimStatusFilter = document.querySelector("#claimStatusFilter");
 const bulkApproveButton = document.querySelector("#bulkApproveButton");
@@ -2737,6 +2738,7 @@ async function exportAccountingCsv() {
   const csvFormat = csvFormatFilter?.value || "review";
   const csvStatus = csvStatusFilter?.value || "settlement_pending";
   const csvScope = csvScopeFilter?.value || "all";
+  const includeAlreadyExported = Boolean(includeExportedCsvRows?.checked);
   const { data, error } = await supabase
     .schema("finance")
     .rpc("export_expense_accounting_csv", {
@@ -2748,21 +2750,32 @@ async function exportAccountingCsv() {
     return;
   }
 
-  const rows = filterCsvRowsByScope(data || [], csvScope);
+  const scopedRows = filterCsvRowsByScope(data || [], csvScope);
+  const existingExports = await loadExistingExportRecords(scopedRows);
+  const exportedClaimIds = new Set(existingExports.map((row) => row.expense_claim_id));
+  const rows = includeAlreadyExported
+    ? scopedRows
+    : scopedRows.filter((row) => !exportedClaimIds.has(row.expense_claim_id));
+
   if (!rows.length) {
-    alert("出力対象の明細がありません。CSVステータスと範囲を確認してください。");
+    const exportedMessage = !includeAlreadyExported && scopedRows.length
+      ? "\n条件に合う明細はすべてCSV出力済みです。再出力する場合は「CSV出力済みも含める」をONにしてください。"
+      : "";
+    alert(`出力対象の明細がありません。CSVステータスと範囲を確認してください。${exportedMessage}`);
     return;
   }
 
-  const existingExports = await loadExistingExportRecords(rows);
-  if (existingExports.length) {
-    const sample = existingExports.slice(0, 5).map((row) =>
+  const includedExistingExports = existingExports.filter((row) => exportedClaimIds.has(row.expense_claim_id) && includeAlreadyExported);
+  if (includedExistingExports.length) {
+    const sample = includedExistingExports.slice(0, 5).map((row) =>
       `・${formatDateTime(row.last_exported_at)} ${row.last_file_name || ""}`
     ).join("\n");
-    const more = existingExports.length > 5 ? `\nほか ${existingExports.length - 5}件` : "";
-    if (!confirm(`このCSVには既に出力済みの明細が ${existingExports.length}件 含まれています。\n二重取込にならないか確認してください。\n\n${sample}${more}\n\nこのままCSVを出力しますか？`)) {
+    const more = includedExistingExports.length > 5 ? `\nほか ${includedExistingExports.length - 5}件` : "";
+    if (!confirm(`このCSVには既に出力済みの明細が ${includedExistingExports.length}件 含まれています。\n二重取込にならないか確認してください。\n\n${sample}${more}\n\nこのままCSVを出力しますか？`)) {
       return;
     }
+  } else if (!includeAlreadyExported && exportedClaimIds.size) {
+    alert(`CSV出力済みの明細 ${exportedClaimIds.size}件は除外しました。`);
   }
 
   const csv = csvFormat.startsWith("yayoi")
