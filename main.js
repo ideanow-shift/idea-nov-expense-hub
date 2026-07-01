@@ -12,6 +12,7 @@ const analyzeReceiptButton = document.querySelector("#analyzeReceiptButton");
 const exportCsvButton = document.querySelector("#exportCsvButton");
 const csvFormatFilter = document.querySelector("#csvFormatFilter");
 const csvStatusFilter = document.querySelector("#csvStatusFilter");
+const accountingExportHistory = document.querySelector("#accountingExportHistory");
 const claimStatusFilter = document.querySelector("#claimStatusFilter");
 const bulkApproveButton = document.querySelector("#bulkApproveButton");
 const bulkSettleButton = document.querySelector("#bulkSettleButton");
@@ -134,6 +135,7 @@ async function refreshAll() {
   await loadNotifications();
   await loadClaims();
   await loadMonthlyReports();
+  await loadAccountingExportHistory();
   renderRoleInsight();
   await loadEmployeeAdmin();
   await loadPermissionAdmin();
@@ -2289,10 +2291,95 @@ async function exportAccountingCsv() {
   const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
+  const fileName = `${csvFilePrefix(csvFormat)}_${csvStatus}_${formatFileDate(new Date())}.csv`;
   link.href = url;
-  link.download = `${csvFilePrefix(csvFormat)}_${csvStatus}_${formatFileDate(new Date())}.csv`;
+  link.download = fileName;
   link.click();
   URL.revokeObjectURL(url);
+
+  await recordAccountingExport({
+    csvFormat,
+    csvStatus,
+    fileName,
+    rows,
+  });
+  await loadAccountingExportHistory();
+}
+
+async function recordAccountingExport({ csvFormat, csvStatus, fileName, rows }) {
+  const claimIds = rows
+    .map((row) => row.expense_claim_id)
+    .filter(Boolean);
+
+  const { error } = await supabase
+    .schema("finance")
+    .rpc("record_accounting_export", {
+      p_export_format: csvFormat,
+      p_status_filter: csvStatus,
+      p_file_name: fileName,
+      p_expense_claim_ids: claimIds,
+    });
+
+  if (error) {
+    alert(`CSVは出力しましたが、出力履歴の記録に失敗しました。\n${error.message}`);
+  }
+}
+
+async function loadAccountingExportHistory() {
+  if (!accountingExportHistory || !currentEmployee) return;
+  if (!hasRole(currentEmployee, "accounting") && !hasRole(currentEmployee, "executive")) {
+    accountingExportHistory.innerHTML = `<p class="muted">経理権限で表示されます。</p>`;
+    return;
+  }
+
+  const { data, error } = await supabase
+    .schema("finance")
+    .from("accounting_export_history")
+    .select("id,export_format,status_filter,file_name,row_count,created_at,exported_by_name,exported_by_email")
+    .order("created_at", { ascending: false })
+    .limit(8);
+
+  if (error) {
+    accountingExportHistory.innerHTML = `<p class="muted">CSV出力履歴を取得できませんでした。</p>`;
+    console.warn(error);
+    return;
+  }
+
+  const rows = data || [];
+  if (!rows.length) {
+    accountingExportHistory.innerHTML = `<p class="muted">CSV出力履歴はまだありません。</p>`;
+    return;
+  }
+
+  accountingExportHistory.innerHTML = rows.map((row) => `
+    <article class="export-history-item">
+      <div>
+        <strong>${escapeHtml(csvFormatLabel(row.export_format))}</strong>
+        <p class="muted">${escapeHtml(row.file_name)} / ${escapeHtml(csvStatusLabel(row.status_filter))}</p>
+      </div>
+      <div class="export-history-meta">
+        <strong>${Number(row.row_count || 0)}件</strong>
+        <span>${escapeHtml(formatDateTime(row.created_at))}</span>
+        <span>${escapeHtml(row.exported_by_name || row.exported_by_email || "")}</span>
+      </div>
+    </article>
+  `).join("");
+}
+
+function csvFormatLabel(format) {
+  return {
+    review: "確認用CSV",
+    yayoi_review: "弥生確認CSV",
+    yayoi_import: "弥生取込CSV",
+  }[format] || format || "";
+}
+
+function csvStatusLabel(status) {
+  return {
+    settlement_pending: "精算待ち",
+    settled: "精算済み",
+    all: "全件",
+  }[status] || status || "";
 }
 
 function buildReviewCsv(rows) {
