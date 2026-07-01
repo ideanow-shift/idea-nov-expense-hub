@@ -24,6 +24,7 @@ const profileLabel = document.querySelector("#profileLabel");
 const storeRank = document.querySelector("#storeRank");
 const departmentRank = document.querySelector("#departmentRank");
 const accountingOps = document.querySelector("#accountingOps");
+const productionReadiness = document.querySelector("#productionReadiness");
 const executiveMonthlyReport = document.querySelector("#executiveMonthlyReport");
 const monthlyAiComment = document.querySelector("#monthlyAiComment");
 const roleInsight = document.querySelector("#roleInsight");
@@ -678,6 +679,7 @@ async function handleDashboardMonthChange() {
     monthlyFiscalMonth.value = dashboardFiscalMonth.value;
   }
   renderAccountingOps();
+  renderProductionReadiness();
   await loadExecutiveMonthlyReport();
 }
 
@@ -687,6 +689,7 @@ async function handleMonthlyFiscalMonthChange() {
   }
   await loadMonthlyReports();
   renderAccountingOps();
+  renderProductionReadiness();
   await loadExecutiveMonthlyReport();
 }
 
@@ -729,6 +732,7 @@ async function loadMonthlyReports() {
   renderMonthlyReports();
   renderClaims();
   await loadMonthlyCloseStatus();
+  renderProductionReadiness();
 }
 
 function renderMonthlyReports() {
@@ -1139,6 +1143,7 @@ async function loadClaims() {
   renderClaims();
   renderRoleInsight();
   renderAccountingOps();
+  renderProductionReadiness();
   await loadExecutiveMonthlyReport();
 }
 
@@ -1381,6 +1386,91 @@ function renderAccountingOps() {
       renderClaims();
     });
   });
+}
+
+function renderProductionReadiness() {
+  if (!productionReadiness) return;
+  if (!canUseAccountingFeatures()) {
+    productionReadiness.innerHTML = `<p class="muted">経理・幹部権限で表示されます。</p>`;
+    return;
+  }
+
+  const fiscalMonth = selectedDashboardFiscalMonthDate();
+  const monthClaims = fiscalMonth
+    ? claimsCache.filter((row) => isClaimInFiscalMonth(row, fiscalMonth))
+    : claimsCache;
+  const monthReports = fiscalMonth
+    ? monthlyReportsCache.filter((report) => report.fiscal_month === fiscalMonth)
+    : monthlyReportsCache;
+
+  const settlementPending = monthClaims.filter((row) => row.status === "settlement_pending");
+  const csvUnexported = settlementPending.filter((row) => !exportedClaimCache.has(row.id));
+  const noReceipt = monthClaims.filter((row) => !Array.isArray(row.expense_receipts) || row.expense_receipts.length === 0);
+  const pendingReports = monthReports.filter((report) => ["accounting_pending", "settlement_pending"].includes(report.status));
+  const draftReports = monthReports.filter((report) => ["draft", "returned"].includes(report.status));
+  const closedReports = monthReports.filter((report) => report.status === "settled");
+
+  const checks = [
+    readinessItem({
+      label: "弥生CSV未出力",
+      value: `${csvUnexported.length}件`,
+      ok: csvUnexported.length === 0,
+      note: csvUnexported.length ? "精算済みにする前にCSV出力対象を確認" : "二重取込リスクは低い状態です",
+      filter: "csv_unexported",
+    }),
+    readinessItem({
+      label: "レシート未添付",
+      value: `${noReceipt.length}件`,
+      ok: noReceipt.length === 0,
+      note: noReceipt.length ? "差戻し候補として確認" : "添付漏れはありません",
+      filter: "ai_review",
+    }),
+    readinessItem({
+      label: "経理未処理パック",
+      value: `${pendingReports.length}件`,
+      ok: pendingReports.length === 0,
+      note: pendingReports.length ? "経理確認または精算済みに進める対象があります" : "月次パックの処理待ちはありません",
+      view: "accounting",
+    }),
+    readinessItem({
+      label: "未提出・差戻しパック",
+      value: `${draftReports.length}件`,
+      ok: draftReports.length === 0,
+      note: draftReports.length ? "申請者側で提出または再提出が必要です" : "申請者側で止まっている月次パックはありません",
+      view: "monthly",
+    }),
+    readinessItem({
+      label: "締め済み精算",
+      value: `${closedReports.length}件`,
+      ok: closedReports.length > 0 || monthClaims.length === 0,
+      note: closedReports.length ? "対象月に精算済みパックがあります" : "月次締め前に残件を確認してください",
+      view: "accounting",
+    }),
+  ];
+
+  productionReadiness.innerHTML = checks.map((item) => `
+    <button type="button" class="readiness-item ${item.ok ? "is-ok" : "is-warning"}" data-readiness-view="${escapeHtml(item.view || "")}" data-readiness-filter="${escapeHtml(item.filter || "")}">
+      <span>${escapeHtml(item.label)}</span>
+      <strong>${escapeHtml(item.value)}</strong>
+      <small>${escapeHtml(item.note)}</small>
+    </button>
+  `).join("");
+
+  productionReadiness.querySelectorAll("button[data-readiness-view], button[data-readiness-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (button.dataset.readinessFilter) {
+        setActiveView("reports");
+        claimStatusFilter.value = button.dataset.readinessFilter;
+        renderClaims();
+        return;
+      }
+      if (button.dataset.readinessView) setActiveView(button.dataset.readinessView);
+    });
+  });
+}
+
+function readinessItem(item) {
+  return item;
 }
 
 async function loadExecutiveMonthlyReport() {
