@@ -606,6 +606,15 @@ button:disabled {
   font-weight: 500;
 }
 
+.monthly-close-month {
+  display: grid;
+  gap: 6px;
+  max-width: 240px;
+  margin-bottom: 10px;
+  color: var(--sub);
+  font-size: 12px;
+}
+
 .monthly-close-status {
   display: grid;
   gap: 4px;

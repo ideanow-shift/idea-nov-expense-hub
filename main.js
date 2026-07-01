@@ -57,6 +57,7 @@ const monthlyAccountingPanel = document.querySelector("#monthlyAccountingPanel")
 const monthlyAccountingList = document.querySelector("#monthlyAccountingList");
 const monthlyCloseStatus = document.querySelector("#monthlyCloseStatus");
 const monthlyCloseButton = document.querySelector("#monthlyCloseButton");
+const monthlyCloseFiscalMonth = document.querySelector("#monthlyCloseFiscalMonth");
 const viewTabs = document.querySelector("#viewTabs");
 
 let uploadedReceiptPath = "";
@@ -91,6 +92,7 @@ monthlyCreateButton.addEventListener("click", createCurrentMonthlyReport);
 monthlyAttachDraftsButton.addEventListener("click", attachDraftClaimsToCurrentReport);
 monthlySubmitButton.addEventListener("click", submitCurrentMonthlyReport);
 monthlyCloseButton?.addEventListener("click", closeSelectedMonthlyPeriod);
+monthlyCloseFiscalMonth?.addEventListener("change", loadMonthlyCloseStatus);
 authForm.addEventListener("submit", signIn);
 signOutButton.addEventListener("click", signOut);
 employeeForm.addEventListener("submit", saveEmployee);
@@ -603,10 +605,17 @@ function initializeMonthlyFiscalMonth() {
   const now = new Date();
   const value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   monthlyFiscalMonth.value = value;
+  if (monthlyCloseFiscalMonth) monthlyCloseFiscalMonth.value = value;
 }
 
 function selectedFiscalMonthDate() {
   const value = monthlyFiscalMonth?.value;
+  if (!value) return null;
+  return `${value}-01`;
+}
+
+function selectedCloseFiscalMonthDate() {
+  const value = monthlyCloseFiscalMonth?.value || monthlyFiscalMonth?.value;
   if (!value) return null;
   return `${value}-01`;
 }
@@ -810,7 +819,7 @@ async function loadMonthlyCloseStatus() {
     return;
   }
 
-  const fiscalMonth = selectedFiscalMonthDate();
+  const fiscalMonth = selectedCloseFiscalMonthDate();
   if (!fiscalMonth) {
     monthlyCloseStatus.textContent = "対象月を選択してください。";
     monthlyCloseButton.disabled = true;
@@ -862,7 +871,7 @@ async function loadMonthlyCloseStatus() {
 }
 
 async function closeSelectedMonthlyPeriod() {
-  const fiscalMonth = selectedFiscalMonthDate();
+  const fiscalMonth = selectedCloseFiscalMonthDate();
   if (!fiscalMonth) return;
   if (!confirm(`${formatMonth(fiscalMonth)} を月次締めしますか？\n締め後は経理上、この月の処理完了として扱います。`)) return;
 
