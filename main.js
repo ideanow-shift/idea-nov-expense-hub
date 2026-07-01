@@ -67,6 +67,7 @@ let pendingMonthlyReportId = "";
 let pendingClaimId = "";
 let notificationsCache = [];
 let auditLogCache = new Map();
+let exportedClaimCache = new Map();
 
 document.querySelector("#refreshButton").addEventListener("click", refreshAll);
 claimForm.addEventListener("submit", submitClaim);
@@ -965,8 +966,30 @@ async function loadClaims() {
 
   claimsCache = data || [];
   await loadAuditLogsForClaims(claimsCache);
+  await loadExportedClaimHistoryForClaims(claimsCache);
   renderClaims();
   renderRoleInsight();
+}
+
+async function loadExportedClaimHistoryForClaims(rows) {
+  exportedClaimCache = new Map();
+  const ids = rows.map((row) => row.id).filter(Boolean);
+  if (!ids.length) return;
+
+  const { data, error } = await supabase
+    .schema("finance")
+    .from("accounting_exported_claims")
+    .select("expense_claim_id,export_count,last_exported_at,last_export_format,last_file_name,last_exported_by_name,last_exported_by_email")
+    .in("expense_claim_id", ids);
+
+  if (error) {
+    console.warn(error);
+    return;
+  }
+
+  (data || []).forEach((row) => {
+    exportedClaimCache.set(row.expense_claim_id, row);
+  });
 }
 
 async function loadAuditLogsForClaims(rows) {
@@ -1909,6 +1932,7 @@ function renderClaim(row) {
         <div class="claim-meta">${escapeHtml(row.expense_date)} / ${escapeHtml(row.vendor_name_raw || "")} / ${Number(row.amount || 0).toLocaleString("ja-JP")}円</div>
         <div class="claim-meta">用途: ${escapeHtml(row.purpose || "")}</div>
         <div class="claim-meta">AI勘定科目候補: ${escapeHtml(row.ai_account_title_candidate || "未設定")} / リスク: ${escapeHtml(riskLabel(row))}</div>
+        ${renderCsvExportBadge(row.id)}
         ${flags.length ? renderReviewFlags(flags) : ""}
         ${renderAuditTrail(row.id)}
       </div>
@@ -1917,6 +1941,21 @@ function renderClaim(row) {
         ${renderActionButtons(row)}
       </div>
     </article>
+  `;
+}
+
+function renderCsvExportBadge(expenseClaimId) {
+  const exportInfo = exportedClaimCache.get(expenseClaimId);
+  if (!exportInfo) return "";
+
+  const exportedBy = exportInfo.last_exported_by_name || exportInfo.last_exported_by_email || "出力者不明";
+  const exportCount = Number(exportInfo.export_count || 0);
+  const suffix = exportCount > 1 ? ` / ${exportCount}回` : "";
+
+  return `
+    <div class="exported-claim-badge">
+      CSV出力済 ${escapeHtml(formatDateTime(exportInfo.last_exported_at))} / ${escapeHtml(exportedBy)}${escapeHtml(suffix)}
+    </div>
   `;
 }
 
@@ -2284,6 +2323,17 @@ async function exportAccountingCsv() {
     return;
   }
 
+  const existingExports = await loadExistingExportRecords(rows);
+  if (existingExports.length) {
+    const sample = existingExports.slice(0, 5).map((row) =>
+      `・${formatDateTime(row.last_exported_at)} ${row.last_file_name || ""}`
+    ).join("\n");
+    const more = existingExports.length > 5 ? `\nほか ${existingExports.length - 5}件` : "";
+    if (!confirm(`このCSVには既に出力済みの明細が ${existingExports.length}件 含まれています。\n二重取込にならないか確認してください。\n\n${sample}${more}\n\nこのままCSVを出力しますか？`)) {
+      return;
+    }
+  }
+
   const csv = csvFormat.startsWith("yayoi")
     ? buildYayoiCsv(rows, { includeHeader: csvFormat === "yayoi_review" })
     : buildReviewCsv(rows);
@@ -2304,6 +2354,26 @@ async function exportAccountingCsv() {
     rows,
   });
   await loadAccountingExportHistory();
+}
+
+async function loadExistingExportRecords(rows) {
+  const claimIds = rows
+    .map((row) => row.expense_claim_id)
+    .filter(Boolean);
+  if (!claimIds.length) return [];
+
+  const { data, error } = await supabase
+    .schema("finance")
+    .from("accounting_exported_claims")
+    .select("expense_claim_id,export_count,last_exported_at,last_file_name")
+    .in("expense_claim_id", claimIds);
+
+  if (error) {
+    console.warn(error);
+    return [];
+  }
+
+  return data || [];
 }
 
 async function recordAccountingExport({ csvFormat, csvStatus, fileName, rows }) {
