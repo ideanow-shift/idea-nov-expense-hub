@@ -17,6 +17,8 @@ const accountingExportHistory = document.querySelector("#accountingExportHistory
 const claimStatusFilter = document.querySelector("#claimStatusFilter");
 const bulkApproveButton = document.querySelector("#bulkApproveButton");
 const bulkSettleButton = document.querySelector("#bulkSettleButton");
+const selectVisibleClaimsButton = document.querySelector("#selectVisibleClaimsButton");
+const clearSelectedClaimsButton = document.querySelector("#clearSelectedClaimsButton");
 const profileLabel = document.querySelector("#profileLabel");
 const storeRank = document.querySelector("#storeRank");
 const departmentRank = document.querySelector("#departmentRank");
@@ -88,6 +90,8 @@ exportCsvButton.addEventListener("click", exportAccountingCsv);
 claimStatusFilter.addEventListener("change", renderClaims);
 bulkApproveButton.addEventListener("click", () => runBulkWorkflowAction("approve"));
 bulkSettleButton.addEventListener("click", () => runBulkWorkflowAction("settle"));
+selectVisibleClaimsButton?.addEventListener("click", selectVisibleClaims);
+clearSelectedClaimsButton?.addEventListener("click", clearSelectedClaims);
 markNotificationsReadButton.addEventListener("click", markNotificationsRead);
 monthlyRefreshButton.addEventListener("click", loadMonthlyReports);
 monthlyFiscalMonth?.addEventListener("change", handleMonthlyFiscalMonthChange);
@@ -2672,6 +2676,24 @@ function selectedClaimIds() {
     .filter(Boolean);
 }
 
+function visibleClaimCheckboxes() {
+  return [...claimList.querySelectorAll("input[data-claim-select]")];
+}
+
+function selectVisibleClaims() {
+  const checkboxes = visibleClaimCheckboxes();
+  checkboxes.forEach((input) => {
+    input.checked = true;
+  });
+  if (!checkboxes.length) alert("表示中の明細がありません。");
+}
+
+function clearSelectedClaims() {
+  visibleClaimCheckboxes().forEach((input) => {
+    input.checked = false;
+  });
+}
+
 function canBulkActOnClaim(claim, action) {
   if (action === "settle") return claim.status === "settlement_pending" && canActOnClaim(claim);
   if (action === "approve") return ["manager_pending", "accounting_pending", "executive_pending"].includes(claim.status) && canActOnClaim(claim);
@@ -2681,6 +2703,8 @@ function canBulkActOnClaim(claim, action) {
 function setBulkButtonsDisabled(disabled) {
   bulkApproveButton.disabled = disabled;
   bulkSettleButton.disabled = disabled;
+  if (selectVisibleClaimsButton) selectVisibleClaimsButton.disabled = disabled;
+  if (clearSelectedClaimsButton) clearSelectedClaimsButton.disabled = disabled;
 }
 
 async function exportAccountingCsv() {
