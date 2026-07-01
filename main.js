@@ -12,6 +12,7 @@ const analyzeReceiptButton = document.querySelector("#analyzeReceiptButton");
 const exportCsvButton = document.querySelector("#exportCsvButton");
 const csvFormatFilter = document.querySelector("#csvFormatFilter");
 const csvStatusFilter = document.querySelector("#csvStatusFilter");
+const csvScopeFilter = document.querySelector("#csvScopeFilter");
 const accountingExportHistory = document.querySelector("#accountingExportHistory");
 const claimStatusFilter = document.querySelector("#claimStatusFilter");
 const bulkApproveButton = document.querySelector("#bulkApproveButton");
@@ -695,6 +696,7 @@ async function loadMonthlyReports() {
     ["draft", "returned"].includes(report.status)
   ) || reportsForSelectedMonth[0] || null;
   renderMonthlyReports();
+  renderClaims();
   await loadMonthlyCloseStatus();
 }
 
@@ -1189,7 +1191,30 @@ function filterClaims(rows) {
   if (filter === "csv_exported") {
     return rows.filter((row) => exportedClaimCache.has(row.id));
   }
+  if (filter === "regular_monthly") {
+    return rows.filter((row) => monthlyReportKindForClaim(row) === "regular");
+  }
+  if (filter === "supplemental_monthly") {
+    return rows.filter((row) => monthlyReportKindForClaim(row) === "supplemental");
+  }
   return rows.filter((row) => row.status === filter);
+}
+
+function monthlyReportForClaim(claim) {
+  if (!claim?.monthly_report_id) return null;
+  return monthlyReportsCache.find((report) => report.id === claim.monthly_report_id) || null;
+}
+
+function monthlyReportKindForClaim(claim) {
+  const report = monthlyReportForClaim(claim);
+  if (!report) return claim?.monthly_report_id ? "unknown" : "unattached";
+  return report.report_kind === "supplemental" ? "supplemental" : "regular";
+}
+
+function monthlyReportKindLabelForClaim(claim) {
+  const report = monthlyReportForClaim(claim);
+  if (!report) return "";
+  return monthlyReportKindLabel(report);
 }
 
 function canActOnClaim(row) {
@@ -2279,6 +2304,7 @@ function renderClaim(row) {
         <div class="claim-meta">${escapeHtml(row.expense_date)} / ${escapeHtml(row.vendor_name_raw || "")} / ${Number(row.amount || 0).toLocaleString("ja-JP")}円</div>
         <div class="claim-meta">用途: ${escapeHtml(row.purpose || "")}</div>
         <div class="claim-meta">AI勘定科目候補: ${escapeHtml(row.ai_account_title_candidate || "未設定")} / リスク: ${escapeHtml(riskLabel(row))}</div>
+        ${renderMonthlyKindBadge(row)}
         ${renderCsvExportBadge(row.id)}
         ${flags.length ? renderReviewFlags(flags) : ""}
         ${renderAuditTrail(row.id)}
@@ -2289,6 +2315,13 @@ function renderClaim(row) {
       </div>
     </article>
   `;
+}
+
+function renderMonthlyKindBadge(row) {
+  const label = monthlyReportKindLabelForClaim(row);
+  if (!label) return "";
+  const kind = monthlyReportKindForClaim(row);
+  return `<div class="monthly-kind-badge ${kind === "supplemental" ? "is-supplemental" : ""}">${escapeHtml(label)}</div>`;
 }
 
 function renderCsvExportBadge(expenseClaimId) {
@@ -2653,6 +2686,7 @@ function setBulkButtonsDisabled(disabled) {
 async function exportAccountingCsv() {
   const csvFormat = csvFormatFilter?.value || "review";
   const csvStatus = csvStatusFilter?.value || "settlement_pending";
+  const csvScope = csvScopeFilter?.value || "all";
   const { data, error } = await supabase
     .schema("finance")
     .rpc("export_expense_accounting_csv", {
@@ -2664,9 +2698,9 @@ async function exportAccountingCsv() {
     return;
   }
 
-  const rows = data || [];
+  const rows = filterCsvRowsByScope(data || [], csvScope);
   if (!rows.length) {
-    alert("出力対象の明細がありません。CSVステータスを確認してください。");
+    alert("出力対象の明細がありません。CSVステータスと範囲を確認してください。");
     return;
   }
 
@@ -2688,7 +2722,7 @@ async function exportAccountingCsv() {
   const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
-  const fileName = `${csvFilePrefix(csvFormat)}_${csvStatus}_${formatFileDate(new Date())}.csv`;
+  const fileName = `${csvFilePrefix(csvFormat)}_${csvStatus}_${csvScopeFileSuffix(csvScope)}_${formatFileDate(new Date())}.csv`;
   link.href = url;
   link.download = fileName;
   link.click();
@@ -2696,11 +2730,30 @@ async function exportAccountingCsv() {
 
   await recordAccountingExport({
     csvFormat,
-    csvStatus,
+    csvStatus: `${csvStatus}:${csvScope}`,
     fileName,
     rows,
   });
   await loadAccountingExportHistory();
+}
+
+function filterCsvRowsByScope(rows, csvScope) {
+  if (csvScope === "all") return rows;
+
+  const byClaimId = new Map(claimsCache.map((claim) => [claim.id, claim]));
+  return rows.filter((row) => {
+    const claim = byClaimId.get(row.expense_claim_id);
+    if (!claim) return false;
+    return monthlyReportKindForClaim(claim) === csvScope;
+  });
+}
+
+function csvScopeFileSuffix(csvScope) {
+  return {
+    all: "all",
+    regular: "regular",
+    supplemental: "supplemental",
+  }[csvScope] || "all";
 }
 
 async function loadExistingExportRecords(rows) {
@@ -2792,11 +2845,22 @@ function csvFormatLabel(format) {
 }
 
 function csvStatusLabel(status) {
-  return {
+  const [baseStatus, scope] = String(status || "").split(":");
+  const statusText = {
     settlement_pending: "精算待ち",
     settled: "精算済み",
     all: "全件",
-  }[status] || status || "";
+  }[baseStatus] || baseStatus || "";
+  const scopeText = csvScopeLabel(scope);
+  return scopeText ? `${statusText} / ${scopeText}` : statusText;
+}
+
+function csvScopeLabel(scope) {
+  return {
+    regular: "通常精算のみ",
+    supplemental: "締め後追加精算のみ",
+    all: "すべて",
+  }[scope] || "";
 }
 
 function buildReviewCsv(rows) {

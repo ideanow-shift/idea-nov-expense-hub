@@ -200,12 +200,21 @@
                 <option value="all">全件</option>
               </select>
             </label>
+            <label class="inline-filter">範囲
+              <select id="csvScopeFilter">
+                <option value="all">すべて</option>
+                <option value="regular">通常精算のみ</option>
+                <option value="supplemental">締め後追加精算のみ</option>
+              </select>
+            </label>
             <label class="inline-filter">表示
               <select id="claimStatusFilter">
                 <option value="all">すべて</option>
                 <option value="ai_review">AI要確認</option>
                 <option value="csv_unexported">CSV未出力</option>
                 <option value="csv_exported">CSV出力済み</option>
+                <option value="regular_monthly">通常精算</option>
+                <option value="supplemental_monthly">締め後追加精算</option>
                 <option value="actionable">自分の確認待ち</option>
                 <option value="manager_pending">店長承認待ち</option>
                 <option value="accounting_pending">経理確認待ち</option>

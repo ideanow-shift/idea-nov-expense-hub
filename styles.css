@@ -1001,6 +1001,25 @@ textarea {
   font-weight: 500;
 }
 
+.monthly-kind-badge {
+  display: inline-flex;
+  width: fit-content;
+  border: 1px solid #d6dde6;
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  margin-top: 8px;
+  color: #4c5968;
+  background: #f6f8fb;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.monthly-kind-badge.is-supplemental {
+  border-color: #d9a441;
+  color: #7a5200;
+  background: #fff4d8;
+}
+
 .audit-trail {
   border-top: 1px solid var(--border);
   margin-top: 10px;
