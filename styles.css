@@ -501,6 +501,39 @@ button:disabled {
   min-width: 84px;
 }
 
+.monthly-close-box {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 14px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  background: var(--soft);
+}
+
+.monthly-close-box h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.monthly-close-status {
+  display: grid;
+  gap: 4px;
+}
+
+.monthly-close-status strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.monthly-close-status span {
+  color: var(--sub);
+  font-size: 12px;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -923,7 +956,7 @@ textarea {
 }
 
 @media (max-width: 820px) {
-  .metrics, .role-insight, .accounting-ops-grid, .form-grid, .claim, .dashboard-grid, .auth-form { grid-template-columns: 1fr; }
+  .metrics, .role-insight, .accounting-ops-grid, .form-grid, .claim, .dashboard-grid, .auth-form, .monthly-close-box { grid-template-columns: 1fr; }
   .claim-actions { justify-content: flex-start; }
   .inline-filter { grid-template-columns: 1fr; }
   .claim-select { align-self: auto; }

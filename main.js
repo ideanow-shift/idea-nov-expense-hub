@@ -53,6 +53,8 @@ const monthlyReportSummary = document.querySelector("#monthlyReportSummary");
 const monthlyReportList = document.querySelector("#monthlyReportList");
 const monthlyAccountingPanel = document.querySelector("#monthlyAccountingPanel");
 const monthlyAccountingList = document.querySelector("#monthlyAccountingList");
+const monthlyCloseStatus = document.querySelector("#monthlyCloseStatus");
+const monthlyCloseButton = document.querySelector("#monthlyCloseButton");
 const viewTabs = document.querySelector("#viewTabs");
 
 let uploadedReceiptPath = "";
@@ -86,6 +88,7 @@ monthlyRefreshButton.addEventListener("click", loadMonthlyReports);
 monthlyCreateButton.addEventListener("click", createCurrentMonthlyReport);
 monthlyAttachDraftsButton.addEventListener("click", attachDraftClaimsToCurrentReport);
 monthlySubmitButton.addEventListener("click", submitCurrentMonthlyReport);
+monthlyCloseButton?.addEventListener("click", closeSelectedMonthlyPeriod);
 authForm.addEventListener("submit", signIn);
 signOutButton.addEventListener("click", signOut);
 employeeForm.addEventListener("submit", saveEmployee);
@@ -643,6 +646,7 @@ async function loadMonthlyReports() {
     ["draft", "returned"].includes(report.status)
   ) || reportsForSelectedMonth[0] || null;
   renderMonthlyReports();
+  await loadMonthlyCloseStatus();
 }
 
 function renderMonthlyReports() {
@@ -793,6 +797,88 @@ function renderMonthlyAccountingReports() {
   });
 
   updateViewVisibility();
+}
+
+async function loadMonthlyCloseStatus() {
+  if (!monthlyCloseStatus || !monthlyCloseButton) return;
+  const canAccounting = hasRole(currentEmployee, "accounting") || hasRole(currentEmployee, "executive");
+  if (!canAccounting) {
+    monthlyCloseStatus.textContent = "経理・幹部権限で表示されます。";
+    monthlyCloseButton.disabled = true;
+    return;
+  }
+
+  const fiscalMonth = selectedFiscalMonthDate();
+  if (!fiscalMonth) {
+    monthlyCloseStatus.textContent = "対象月を選択してください。";
+    monthlyCloseButton.disabled = true;
+    return;
+  }
+
+  const { data, error } = await supabase
+    .schema("finance")
+    .from("monthly_expense_close_status")
+    .select("fiscal_month,close_status,closed_at,closed_by_name,total_claim_count,total_amount,draft_count,returned_count,approval_pending_count,settlement_pending_count,settled_count,blocker_count,can_close")
+    .eq("fiscal_month", fiscalMonth)
+    .maybeSingle();
+
+  if (error) {
+    console.warn(error);
+    monthlyCloseStatus.textContent = "締め状況を取得できませんでした。";
+    monthlyCloseButton.disabled = true;
+    return;
+  }
+
+  if (!data) {
+    monthlyCloseStatus.textContent = `${formatMonth(fiscalMonth)} は経費明細がありません。`;
+    monthlyCloseButton.disabled = true;
+    return;
+  }
+
+  const blockers = [
+    data.draft_count ? `下書き ${data.draft_count}件` : "",
+    data.returned_count ? `差戻し ${data.returned_count}件` : "",
+    data.approval_pending_count ? `確認待ち ${data.approval_pending_count}件` : "",
+    data.settlement_pending_count ? `精算待ち ${data.settlement_pending_count}件` : "",
+  ].filter(Boolean);
+
+  if (data.close_status === "closed") {
+    monthlyCloseStatus.innerHTML = `
+      <strong>${escapeHtml(formatMonth(data.fiscal_month))} 締め済み</strong>
+      <span>${escapeHtml(formatDateTime(data.closed_at))} / ${escapeHtml(data.closed_by_name || "担当者不明")} / ${Number(data.total_claim_count || 0)}件 / ${Number(data.total_amount || 0).toLocaleString("ja-JP")}円</span>
+    `;
+    monthlyCloseButton.disabled = true;
+    return;
+  }
+
+  monthlyCloseStatus.innerHTML = `
+    <strong>${escapeHtml(formatMonth(data.fiscal_month))} 未締め</strong>
+    <span>${Number(data.total_claim_count || 0)}件 / ${Number(data.total_amount || 0).toLocaleString("ja-JP")}円 / 精算済み ${Number(data.settled_count || 0)}件</span>
+    <span>${blockers.length ? `未処理: ${escapeHtml(blockers.join(" / "))}` : "未処理はありません。締め可能です。"}</span>
+  `;
+  monthlyCloseButton.disabled = !data.can_close;
+}
+
+async function closeSelectedMonthlyPeriod() {
+  const fiscalMonth = selectedFiscalMonthDate();
+  if (!fiscalMonth) return;
+  if (!confirm(`${formatMonth(fiscalMonth)} を月次締めしますか？\n締め後は経理上、この月の処理完了として扱います。`)) return;
+
+  monthlyCloseButton.disabled = true;
+  const { error } = await supabase
+    .schema("finance")
+    .rpc("close_monthly_expense_period", {
+      p_fiscal_month: fiscalMonth,
+      p_note: "月次締め",
+    });
+
+  if (error) {
+    alert(error.message);
+    await loadMonthlyCloseStatus();
+    return;
+  }
+
+  await refreshAll();
 }
 
 function canActOnMonthlyReport(report, action) {
