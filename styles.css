@@ -276,6 +276,27 @@ button:disabled {
   gap: 12px;
 }
 
+.ai-comment-box {
+  border: 1px solid #d9a441;
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 12px;
+  background: #fffaf0;
+}
+
+.ai-comment-box strong {
+  display: block;
+  color: var(--text);
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.ai-comment-box p {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.7;
+}
+
 .executive-summary-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

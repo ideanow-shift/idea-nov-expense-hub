@@ -21,6 +21,7 @@ const storeRank = document.querySelector("#storeRank");
 const departmentRank = document.querySelector("#departmentRank");
 const accountingOps = document.querySelector("#accountingOps");
 const executiveMonthlyReport = document.querySelector("#executiveMonthlyReport");
+const monthlyAiComment = document.querySelector("#monthlyAiComment");
 const roleInsight = document.querySelector("#roleInsight");
 const notificationList = document.querySelector("#notificationList");
 const markNotificationsReadButton = document.querySelector("#markNotificationsReadButton");
@@ -1278,14 +1279,18 @@ async function loadExecutiveMonthlyReport() {
   if (!executiveMonthlyReport) return;
   if (!hasRole(currentEmployee, "executive") && !hasRole(currentEmployee, "accounting")) {
     executiveMonthlyReport.innerHTML = `<p class="muted">幹部・経理権限で表示されます。</p>`;
+    if (monthlyAiComment) monthlyAiComment.textContent = "幹部・経理権限で表示されます。";
     return;
   }
 
   const fiscalMonth = selectedFiscalMonthDate();
   if (!fiscalMonth) {
     executiveMonthlyReport.innerHTML = `<p class="muted">対象月を選択してください。</p>`;
+    if (monthlyAiComment) monthlyAiComment.textContent = "対象月を選択してください。";
     return;
   }
+
+  await loadMonthlyAiComment(fiscalMonth);
 
   const { data, error } = await supabase
     .schema("finance")
@@ -1306,6 +1311,27 @@ async function loadExecutiveMonthlyReport() {
   }
 
   renderExecutiveMonthlyReport(data);
+}
+
+async function loadMonthlyAiComment(fiscalMonth) {
+  if (!monthlyAiComment) return;
+
+  const { data, error } = await supabase
+    .schema("finance")
+    .rpc("monthly_expense_comment", {
+      p_fiscal_month: fiscalMonth,
+    });
+
+  if (error) {
+    console.warn(error);
+    monthlyAiComment.textContent = "AI分析コメントを取得できませんでした。";
+    return;
+  }
+
+  monthlyAiComment.innerHTML = `
+    <strong>AI分析コメント</strong>
+    <p>${escapeHtml(data || "コメントはありません。")}</p>
+  `;
 }
 
 function renderExecutiveMonthlyReport(report) {
