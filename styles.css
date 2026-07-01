@@ -299,6 +299,50 @@ button:disabled {
   margin-bottom: 12px;
 }
 
+.export-history-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin: 12px 0;
+  background: var(--soft);
+}
+
+.export-history-panel h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+.export-history-list {
+  display: grid;
+  gap: 8px;
+}
+
+.export-history-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.export-history-item p {
+  margin: 4px 0 0;
+}
+
+.export-history-meta {
+  display: grid;
+  gap: 2px;
+  text-align: right;
+}
+
+.export-history-meta span {
+  color: var(--sub);
+  font-size: 12px;
+}
+
 .monthly-summary {
   margin-bottom: 12px;
 }
