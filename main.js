@@ -20,6 +20,7 @@ const profileLabel = document.querySelector("#profileLabel");
 const storeRank = document.querySelector("#storeRank");
 const departmentRank = document.querySelector("#departmentRank");
 const accountingOps = document.querySelector("#accountingOps");
+const executiveMonthlyReport = document.querySelector("#executiveMonthlyReport");
 const roleInsight = document.querySelector("#roleInsight");
 const notificationList = document.querySelector("#notificationList");
 const markNotificationsReadButton = document.querySelector("#markNotificationsReadButton");
@@ -1057,6 +1058,7 @@ async function loadClaims() {
   renderClaims();
   renderRoleInsight();
   renderAccountingOps();
+  await loadExecutiveMonthlyReport();
 }
 
 async function loadExportedClaimHistoryForClaims(rows) {
@@ -1270,6 +1272,111 @@ function renderAccountingOps() {
       renderClaims();
     });
   });
+}
+
+async function loadExecutiveMonthlyReport() {
+  if (!executiveMonthlyReport) return;
+  if (!hasRole(currentEmployee, "executive") && !hasRole(currentEmployee, "accounting")) {
+    executiveMonthlyReport.innerHTML = `<p class="muted">幹部・経理権限で表示されます。</p>`;
+    return;
+  }
+
+  const fiscalMonth = selectedFiscalMonthDate();
+  if (!fiscalMonth) {
+    executiveMonthlyReport.innerHTML = `<p class="muted">対象月を選択してください。</p>`;
+    return;
+  }
+
+  const { data, error } = await supabase
+    .schema("finance")
+    .from("monthly_expense_executive_report")
+    .select("fiscal_month,total_claim_count,total_amount,total_tax,open_count,settled_count,risk_count,high_amount_count,stores,departments,high_amount_claims,close_status,closed_at,closed_by_name")
+    .eq("fiscal_month", fiscalMonth)
+    .maybeSingle();
+
+  if (error) {
+    console.warn(error);
+    executiveMonthlyReport.innerHTML = `<p class="muted">月次幹部レポートを取得できませんでした。</p>`;
+    return;
+  }
+
+  if (!data) {
+    executiveMonthlyReport.innerHTML = `<p class="muted">${escapeHtml(formatMonth(fiscalMonth))} の経費データはありません。</p>`;
+    return;
+  }
+
+  renderExecutiveMonthlyReport(data);
+}
+
+function renderExecutiveMonthlyReport(report) {
+  const stores = Array.isArray(report.stores) ? report.stores.slice(0, 5) : [];
+  const departments = Array.isArray(report.departments) ? report.departments.slice(0, 5) : [];
+  const highAmountClaims = Array.isArray(report.high_amount_claims) ? report.high_amount_claims.slice(0, 5) : [];
+  const closeLabel = report.close_status === "closed"
+    ? `締め済み ${formatDateTime(report.closed_at)} / ${report.closed_by_name || "担当者不明"}`
+    : "未締め";
+
+  executiveMonthlyReport.innerHTML = `
+    <div class="executive-summary-grid">
+      <article>
+        <span>対象月</span>
+        <strong>${escapeHtml(formatMonth(report.fiscal_month))}</strong>
+        <small>${escapeHtml(closeLabel)}</small>
+      </article>
+      <article>
+        <span>合計</span>
+        <strong>${Number(report.total_amount || 0).toLocaleString("ja-JP")}円</strong>
+        <small>${Number(report.total_claim_count || 0)}件 / 税 ${Number(report.total_tax || 0).toLocaleString("ja-JP")}円</small>
+      </article>
+      <article>
+        <span>未処理</span>
+        <strong>${Number(report.open_count || 0)}件</strong>
+        <small>精算済み ${Number(report.settled_count || 0)}件</small>
+      </article>
+      <article>
+        <span>要確認</span>
+        <strong>${Number(report.risk_count || 0)}件</strong>
+        <small>高額 ${Number(report.high_amount_count || 0)}件</small>
+      </article>
+    </div>
+    <div class="executive-report-grid">
+      ${renderExecutiveRank("店舗別", stores, "store_name")}
+      ${renderExecutiveRank("部署別", departments, "department_name")}
+      ${renderHighAmountClaims(highAmountClaims)}
+    </div>
+  `;
+}
+
+function renderExecutiveRank(title, rows, nameKey) {
+  return `
+    <article class="executive-report-card">
+      <h3>${escapeHtml(title)}</h3>
+      ${rows.length ? rows.map((row) => `
+        <div class="rank-item">
+          <span>${escapeHtml(row[nameKey] || "未設定")} <span class="muted">(${Number(row.claim_count || 0)}件)</span></span>
+          <strong>${Number(row.total_amount || 0).toLocaleString("ja-JP")}円</strong>
+        </div>
+      `).join("") : `<p class="muted">データなし</p>`}
+    </article>
+  `;
+}
+
+function renderHighAmountClaims(rows) {
+  return `
+    <article class="executive-report-card">
+      <h3>高額・要確認</h3>
+      ${rows.length ? rows.map((row) => `
+        <div class="executive-claim-item">
+          <div>
+            <strong>${escapeHtml(row.title || "無題")}</strong>
+            <p class="muted">${escapeHtml(row.expense_date || "")} / ${escapeHtml(row.applicant_name || "")} / ${escapeHtml(row.purpose || "")}</p>
+            ${row.risk_flags ? `<small>${escapeHtml(row.risk_flags)}</small>` : ""}
+          </div>
+          <strong>${Number(row.amount || 0).toLocaleString("ja-JP")}円</strong>
+        </div>
+      `).join("") : `<p class="muted">高額・要確認の明細はありません。</p>`}
+    </article>
+  `;
 }
 
 async function loadEmployeeAdmin() {
