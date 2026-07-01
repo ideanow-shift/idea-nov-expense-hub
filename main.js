@@ -145,10 +145,10 @@ async function loadNotifications() {
 
   const { data, error } = await supabase
     .schema("os")
-    .from("notifications")
-    .select("id,title,body,status,created_at,entity_type,entity_id")
-    .eq("channel", "nov_hub")
-    .in("status", ["queued", "sent"])
+    .from("nov_hub_notification_inbox")
+    .select("id,title,body,status,unread,created_at,entity_type,entity_id,action_label,target_module,target_view,target_query")
+    .eq("target_module", "expense_hub")
+    .eq("unread", true)
     .order("created_at", { ascending: false })
     .limit(10);
 
@@ -179,6 +179,7 @@ function renderNotifications() {
       </div>
       <div class="notification-actions">
         <span class="muted">${escapeHtml(formatDateTime(notification.created_at))}</span>
+        ${notification.action_label ? `<span class="notification-label">${escapeHtml(notification.action_label)}</span>` : ""}
         ${notification.entity_id ? `<button type="button" data-jump-entity="${escapeHtml(notification.entity_id)}" data-entity-type="${escapeHtml(notification.entity_type || "")}">対象を見る</button>` : ""}
       </div>
     </article>
@@ -196,12 +197,9 @@ async function markNotificationsRead() {
   markNotificationsReadButton.disabled = true;
   const { error } = await supabase
     .schema("os")
-    .from("notifications")
-    .update({
-      status: "read",
-      read_at: new Date().toISOString(),
-    })
-    .in("id", ids);
+    .rpc("mark_nov_hub_notifications_read", {
+      p_notification_ids: ids,
+    });
 
   if (error) {
     alert(error.message);
