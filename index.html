@@ -41,6 +41,16 @@
       </nav>
 
       <section data-view-section="dashboard" class="view-section">
+      <section class="panel dashboard-control-panel">
+        <div class="section-header">
+          <h2>Dashboard</h2>
+          <span class="muted">対象月をそろえて月次状況を確認します</span>
+        </div>
+        <label class="dashboard-month-filter">対象月
+          <input id="dashboardFiscalMonth" type="month" />
+        </label>
+      </section>
+
       <section class="metrics">
         <article><span>申請</span><strong id="metricAll">0</strong></article>
         <article><span>承認待ち</span><strong id="metricPending">0</strong></article>

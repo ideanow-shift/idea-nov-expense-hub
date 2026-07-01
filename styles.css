@@ -364,6 +364,15 @@ button:disabled {
   gap: 12px;
 }
 
+.dashboard-control-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.dashboard-month-filter {
+  max-width: 360px;
+}
+
 .rank-list {
   display: flex;
   flex-direction: column;

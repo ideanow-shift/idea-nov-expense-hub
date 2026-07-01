@@ -58,6 +58,7 @@ const monthlyAccountingList = document.querySelector("#monthlyAccountingList");
 const monthlyCloseStatus = document.querySelector("#monthlyCloseStatus");
 const monthlyCloseButton = document.querySelector("#monthlyCloseButton");
 const monthlyCloseFiscalMonth = document.querySelector("#monthlyCloseFiscalMonth");
+const dashboardFiscalMonth = document.querySelector("#dashboardFiscalMonth");
 const viewTabs = document.querySelector("#viewTabs");
 
 let uploadedReceiptPath = "";
@@ -88,11 +89,13 @@ bulkApproveButton.addEventListener("click", () => runBulkWorkflowAction("approve
 bulkSettleButton.addEventListener("click", () => runBulkWorkflowAction("settle"));
 markNotificationsReadButton.addEventListener("click", markNotificationsRead);
 monthlyRefreshButton.addEventListener("click", loadMonthlyReports);
+monthlyFiscalMonth?.addEventListener("change", handleMonthlyFiscalMonthChange);
 monthlyCreateButton.addEventListener("click", createCurrentMonthlyReport);
 monthlyAttachDraftsButton.addEventListener("click", attachDraftClaimsToCurrentReport);
 monthlySubmitButton.addEventListener("click", submitCurrentMonthlyReport);
 monthlyCloseButton?.addEventListener("click", closeSelectedMonthlyPeriod);
 monthlyCloseFiscalMonth?.addEventListener("change", loadMonthlyCloseStatus);
+dashboardFiscalMonth?.addEventListener("change", handleDashboardMonthChange);
 authForm.addEventListener("submit", signIn);
 signOutButton.addEventListener("click", signOut);
 employeeForm.addEventListener("submit", saveEmployee);
@@ -600,12 +603,24 @@ function renderRank(container, rows, nameKey) {
   `).join("");
 }
 
+function renderDashboardMonthSummary(rows) {
+  renderDashboardSummary({
+    total_count: rows.length,
+    pending_count: rows.filter((row) =>
+      ["manager_pending", "accounting_pending", "executive_pending"].includes(row.status)
+    ).length,
+    settlement_pending_count: rows.filter((row) => row.status === "settlement_pending").length,
+    high_risk_count: rows.filter((row) => aiReviewFlags(row).length > 0).length,
+  });
+}
+
 function initializeMonthlyFiscalMonth() {
   if (!monthlyFiscalMonth) return;
   const now = new Date();
   const value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   monthlyFiscalMonth.value = value;
   if (monthlyCloseFiscalMonth) monthlyCloseFiscalMonth.value = value;
+  if (dashboardFiscalMonth) dashboardFiscalMonth.value = value;
 }
 
 function selectedFiscalMonthDate() {
@@ -618,6 +633,29 @@ function selectedCloseFiscalMonthDate() {
   const value = monthlyCloseFiscalMonth?.value || monthlyFiscalMonth?.value;
   if (!value) return null;
   return `${value}-01`;
+}
+
+function selectedDashboardFiscalMonthDate() {
+  const value = dashboardFiscalMonth?.value || monthlyFiscalMonth?.value;
+  if (!value) return null;
+  return `${value}-01`;
+}
+
+async function handleDashboardMonthChange() {
+  if (dashboardFiscalMonth?.value && monthlyFiscalMonth) {
+    monthlyFiscalMonth.value = dashboardFiscalMonth.value;
+  }
+  renderAccountingOps();
+  await loadExecutiveMonthlyReport();
+}
+
+async function handleMonthlyFiscalMonthChange() {
+  if (monthlyFiscalMonth?.value && dashboardFiscalMonth) {
+    dashboardFiscalMonth.value = monthlyFiscalMonth.value;
+  }
+  await loadMonthlyReports();
+  renderAccountingOps();
+  await loadExecutiveMonthlyReport();
 }
 
 function fiscalMonthFromExpenseDate(expenseDate) {
@@ -1229,12 +1267,17 @@ function renderAccountingOps() {
     return;
   }
 
-  const settlementPending = claimsCache.filter((row) => row.status === "settlement_pending");
+  const fiscalMonth = selectedDashboardFiscalMonthDate();
+  const dashboardClaims = fiscalMonth
+    ? claimsCache.filter((row) => isClaimInFiscalMonth(row, fiscalMonth))
+    : claimsCache;
+  renderDashboardMonthSummary(dashboardClaims);
+  const settlementPending = dashboardClaims.filter((row) => row.status === "settlement_pending");
   const csvUnexported = settlementPending.filter((row) => !exportedClaimCache.has(row.id));
   const csvExported = settlementPending.filter((row) => exportedClaimCache.has(row.id));
-  const noReceipt = claimsCache.filter((row) => !Array.isArray(row.expense_receipts) || row.expense_receipts.length === 0);
-  const aiReview = claimsCache.filter((row) => aiReviewFlags(row).length > 0);
-  const highAmount = claimsCache.filter((row) => Number(row.amount || 0) >= 50000);
+  const noReceipt = dashboardClaims.filter((row) => !Array.isArray(row.expense_receipts) || row.expense_receipts.length === 0);
+  const aiReview = dashboardClaims.filter((row) => aiReviewFlags(row).length > 0);
+  const highAmount = dashboardClaims.filter((row) => Number(row.amount || 0) >= 50000);
 
   const cards = [
     {
@@ -1292,10 +1335,12 @@ async function loadExecutiveMonthlyReport() {
     return;
   }
 
-  const fiscalMonth = selectedFiscalMonthDate();
+  const fiscalMonth = selectedDashboardFiscalMonthDate();
   if (!fiscalMonth) {
     executiveMonthlyReport.innerHTML = `<p class="muted">対象月を選択してください。</p>`;
     if (monthlyAiComment) monthlyAiComment.textContent = "対象月を選択してください。";
+    renderRank(storeRank, [], "store_name");
+    renderRank(departmentRank, [], "department_name");
     return;
   }
 
@@ -1316,9 +1361,13 @@ async function loadExecutiveMonthlyReport() {
 
   if (!data) {
     executiveMonthlyReport.innerHTML = `<p class="muted">${escapeHtml(formatMonth(fiscalMonth))} の経費データはありません。</p>`;
+    renderRank(storeRank, [], "store_name");
+    renderRank(departmentRank, [], "department_name");
     return;
   }
 
+  renderRank(storeRank, Array.isArray(data.stores) ? data.stores : [], "store_name");
+  renderRank(departmentRank, Array.isArray(data.departments) ? data.departments : [], "department_name");
   renderExecutiveMonthlyReport(data);
 }
 
