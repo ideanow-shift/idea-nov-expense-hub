@@ -1045,6 +1045,12 @@ function filterClaims(rows) {
   if (filter === "ai_review") {
     return rows.filter((row) => aiReviewFlags(row).length > 0);
   }
+  if (filter === "csv_unexported") {
+    return rows.filter((row) => !exportedClaimCache.has(row.id));
+  }
+  if (filter === "csv_exported") {
+    return rows.filter((row) => exportedClaimCache.has(row.id));
+  }
   return rows.filter((row) => row.status === filter);
 }
 
