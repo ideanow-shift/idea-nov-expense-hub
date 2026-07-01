@@ -221,6 +221,56 @@ button:disabled {
   margin-bottom: 16px;
 }
 
+.accounting-ops-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.accounting-ops-card {
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  text-align: left;
+  display: grid;
+  gap: 8px;
+  min-height: 112px;
+}
+
+.accounting-ops-card:hover {
+  background: var(--soft);
+}
+
+.accounting-ops-card span {
+  color: var(--sub);
+  font-size: 12px;
+}
+
+.accounting-ops-card strong {
+  font-size: 24px;
+  font-weight: 500;
+}
+
+.accounting-ops-card small {
+  color: var(--sub);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ops-warning {
+  border-color: #d9a441;
+  background: #fffaf0;
+}
+
+.ops-ok {
+  border-color: #9bbf9b;
+  background: #f0fbf2;
+}
+
+.ops-neutral {
+  background: var(--soft);
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -873,7 +923,7 @@ textarea {
 }
 
 @media (max-width: 820px) {
-  .metrics, .role-insight, .form-grid, .claim, .dashboard-grid, .auth-form { grid-template-columns: 1fr; }
+  .metrics, .role-insight, .accounting-ops-grid, .form-grid, .claim, .dashboard-grid, .auth-form { grid-template-columns: 1fr; }
   .claim-actions { justify-content: flex-start; }
   .inline-filter { grid-template-columns: 1fr; }
   .claim-select { align-self: auto; }

@@ -19,6 +19,7 @@ const bulkSettleButton = document.querySelector("#bulkSettleButton");
 const profileLabel = document.querySelector("#profileLabel");
 const storeRank = document.querySelector("#storeRank");
 const departmentRank = document.querySelector("#departmentRank");
+const accountingOps = document.querySelector("#accountingOps");
 const roleInsight = document.querySelector("#roleInsight");
 const notificationList = document.querySelector("#notificationList");
 const markNotificationsReadButton = document.querySelector("#markNotificationsReadButton");
@@ -969,6 +970,7 @@ async function loadClaims() {
   await loadExportedClaimHistoryForClaims(claimsCache);
   renderClaims();
   renderRoleInsight();
+  renderAccountingOps();
 }
 
 async function loadExportedClaimHistoryForClaims(rows) {
@@ -1120,6 +1122,68 @@ function renderRoleInsight() {
       <p>${escapeHtml(item.note)}</p>
     </article>
   `).join("");
+}
+
+function renderAccountingOps() {
+  if (!accountingOps) return;
+  if (!hasRole(currentEmployee, "accounting") && !hasRole(currentEmployee, "executive")) {
+    accountingOps.innerHTML = `<p class="muted">経理・幹部権限で表示されます。</p>`;
+    return;
+  }
+
+  const settlementPending = claimsCache.filter((row) => row.status === "settlement_pending");
+  const csvUnexported = settlementPending.filter((row) => !exportedClaimCache.has(row.id));
+  const csvExported = settlementPending.filter((row) => exportedClaimCache.has(row.id));
+  const noReceipt = claimsCache.filter((row) => !Array.isArray(row.expense_receipts) || row.expense_receipts.length === 0);
+  const aiReview = claimsCache.filter((row) => aiReviewFlags(row).length > 0);
+  const highAmount = claimsCache.filter((row) => Number(row.amount || 0) >= 50000);
+
+  const cards = [
+    {
+      label: "CSV未出力",
+      value: `${csvUnexported.length}件`,
+      note: "弥生取込前に出力が必要な精算待ち明細",
+      filter: "csv_unexported",
+      tone: csvUnexported.length ? "warning" : "ok",
+    },
+    {
+      label: "CSV出力済み",
+      value: `${csvExported.length}件`,
+      note: "二重取込に注意する明細",
+      filter: "csv_exported",
+      tone: "neutral",
+    },
+    {
+      label: "レシートなし",
+      value: `${noReceipt.length}件`,
+      note: "差戻し候補として確認",
+      filter: "ai_review",
+      tone: noReceipt.length ? "warning" : "ok",
+    },
+    {
+      label: "高額・AI要確認",
+      value: `${aiReview.length}件`,
+      note: highAmount.length ? `高額 ${highAmount.length}件を含みます` : "優先度順に確認",
+      filter: "ai_review",
+      tone: aiReview.length ? "warning" : "ok",
+    },
+  ];
+
+  accountingOps.innerHTML = cards.map((card) => `
+    <button type="button" class="accounting-ops-card ops-${escapeHtml(card.tone)}" data-ops-filter="${escapeHtml(card.filter)}">
+      <span>${escapeHtml(card.label)}</span>
+      <strong>${escapeHtml(card.value)}</strong>
+      <small>${escapeHtml(card.note)}</small>
+    </button>
+  `).join("");
+
+  accountingOps.querySelectorAll("button[data-ops-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setActiveView("reports");
+      claimStatusFilter.value = button.dataset.opsFilter;
+      renderClaims();
+    });
+  });
 }
 
 async function loadEmployeeAdmin() {
