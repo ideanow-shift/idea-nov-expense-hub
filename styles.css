@@ -282,6 +282,15 @@ button:disabled {
   font-size: 12px;
 }
 
+.notification-label {
+  color: var(--sub);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .monthly-actions {
   display: grid;
   grid-template-columns: minmax(180px, 1fr) repeat(3, auto);
