@@ -1,0 +1,249 @@
+﻿<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Expense Hub | IDEA NOV OS</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p>IDEA NOV OS / Finance Module</p>
+          <h1>Expense Hub</h1>
+        </div>
+        <div class="topbar-actions">
+          <span id="profileLabel" class="muted">ログイン確認中</span>
+          <button id="refreshButton" hidden>更新</button>
+          <button id="signOutButton" class="secondary" type="button" hidden>ログアウト</button>
+        </div>
+      </header>
+
+      <section id="authPanel" class="panel auth-panel">
+        <h2>ログイン</h2>
+        <form id="authForm" class="auth-form">
+          <label>メールアドレス<input name="email" type="email" autocomplete="email" required /></label>
+          <label>パスワード<input name="password" type="password" autocomplete="current-password" required /></label>
+          <button type="submit">ログイン</button>
+        </form>
+        <p class="muted">初期検証ではSupabase Authユーザーのメールと core.employees.email を一致させます。</p>
+      </section>
+
+      <section id="appContent" class="app-content" hidden>
+      <nav id="viewTabs" class="view-tabs" aria-label="Expense Hub menu">
+        <button type="button" data-view-tab="input">入力</button>
+        <button type="button" data-view-tab="monthly">月次精算</button>
+        <button type="button" data-view-tab="accounting">経理確認</button>
+        <button type="button" data-view-tab="reports">一覧/CSV</button>
+        <button type="button" data-view-tab="dashboard">Dashboard</button>
+        <button type="button" data-view-tab="admin">管理</button>
+      </nav>
+
+      <section data-view-section="dashboard" class="view-section">
+      <section class="metrics">
+        <article><span>申請</span><strong id="metricAll">0</strong></article>
+        <article><span>承認待ち</span><strong id="metricPending">0</strong></article>
+        <article><span>未精算</span><strong id="metricSettlement">0</strong></article>
+        <article><span>AI要確認</span><strong id="metricRisk">0</strong></article>
+      </section>
+
+      <section id="roleInsight" class="role-insight"></section>
+
+      <section class="panel notification-panel">
+        <div class="section-header">
+          <h2>通知</h2>
+          <button id="markNotificationsReadButton" class="secondary" type="button">通知を既読</button>
+        </div>
+        <div id="notificationList" class="notification-list"></div>
+      </section>
+
+      <section class="dashboard-grid">
+        <article class="panel">
+          <h2>店舗別経費</h2>
+          <div id="storeRank" class="rank-list"></div>
+        </article>
+        <article class="panel">
+          <h2>部門別経費</h2>
+          <div id="departmentRank" class="rank-list"></div>
+        </article>
+      </section>
+      </section>
+
+      <section data-view-section="input" class="view-section panel claim-entry-panel">
+        <h2>経費明細登録</h2>
+        <form id="claimForm" class="form-grid claim-form-compact">
+          <div class="wide claim-assist">
+            <button id="applyLastClaimButton" class="secondary" type="button">前回入力を使う</button>
+            <span id="lastClaimHint" class="muted">前回の用途・支払方法・勘定科目候補を再利用できます</span>
+          </div>
+          <label class="receipt-file-field">レシート
+            <input id="receiptFile" name="receiptFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" />
+          </label>
+          <div class="receipt-actions">
+            <button id="analyzeReceiptButton" type="button">レシートAI解析</button>
+            <span id="receiptStatus" class="muted">レシート未選択</span>
+          </div>
+          <details class="ocr-details">
+            <summary>OCR補助</summary>
+            <textarea id="ocrText" name="ocrText" rows="3" placeholder="画像OCRが不安な場合だけ、レシート文字を貼り付け"></textarea>
+          </details>
+          <label>日付<input name="expenseDate" type="date" required /></label>
+          <label>金額<input name="amount" type="number" min="1" required /></label>
+          <label>消費税<input name="tax" type="number" min="0" value="0" /></label>
+          <label>店名<input name="vendor" type="text" /></label>
+          <div id="vendorSuggestion" class="field-suggestion" hidden></div>
+          <label>支払方法<input name="paymentMethod" type="text" /></label>
+          <div class="quick-picks">
+            <span>支払方法</span>
+            <button type="button" data-quick-fill="paymentMethod" data-value="現金">現金</button>
+            <button type="button" data-quick-fill="paymentMethod" data-value="カード">カード</button>
+            <button type="button" data-quick-fill="paymentMethod" data-value="PayPay">PayPay</button>
+            <button type="button" data-quick-fill="paymentMethod" data-value="立替">立替</button>
+          </div>
+          <label>用途<input name="purpose" type="text" /></label>
+          <label id="highAmountReasonField" class="wide" hidden>高額申請理由
+            <textarea name="highAmountReason" rows="3" placeholder="10万円以上の場合は、購入理由・必要性・承認者が判断しやすい補足を入力"></textarea>
+          </label>
+          <div class="quick-picks wide purpose-picks">
+            <span>よく使う用途</span>
+            <button type="button" data-purpose-preset="備品購入" data-account-title="消耗品費">備品購入</button>
+            <button type="button" data-purpose-preset="交通費" data-account-title="旅費交通費">交通費</button>
+            <button type="button" data-purpose-preset="会議費" data-account-title="会議費">会議費</button>
+            <button type="button" data-purpose-preset="材料購入" data-account-title="材料費">材料購入</button>
+            <button type="button" data-purpose-preset="研修・教育" data-account-title="研修費">研修・教育</button>
+            <button type="button" data-purpose-preset="その他" data-account-title="消耗品費">その他</button>
+          </div>
+          <label>勘定科目候補<input name="accountTitleCandidate" type="text" /></label>
+          <label class="wide">タイトル<input name="title" type="text" required /></label>
+          <div id="claimPrecheck" class="precheck wide" hidden></div>
+          <button class="save-claim-button" type="submit">明細保存</button>
+        </form>
+      </section>
+
+      <section data-view-section="monthly" class="view-section panel monthly-panel">
+        <div class="section-header">
+          <h2>月次精算</h2>
+          <button id="monthlyRefreshButton" class="secondary" type="button">月次更新</button>
+        </div>
+        <div class="monthly-actions">
+          <label>対象月<input id="monthlyFiscalMonth" type="month" /></label>
+          <button id="monthlyCreateButton" type="button">月次パック作成</button>
+          <button id="monthlyAttachDraftsButton" class="secondary" type="button">未提出明細を追加</button>
+          <button id="monthlySubmitButton" type="button">経理へ提出</button>
+        </div>
+        <div id="monthlyReportSummary" class="monthly-summary"></div>
+        <div id="monthlyReportList" class="monthly-list"></div>
+      </section>
+
+      <section id="monthlyAccountingPanel" data-view-section="accounting" class="view-section panel monthly-accounting-panel">
+        <div class="section-header">
+          <h2>月次経理確認</h2>
+          <span class="muted">月次パック単位で確認・差戻し・精算します</span>
+        </div>
+        <div id="monthlyAccountingList" class="monthly-list"></div>
+      </section>
+
+      <section data-view-section="reports" class="view-section panel">
+        <h2>明細・申請一覧</h2>
+        <div class="toolbar">
+          <div class="toolbar-left">
+            <button id="exportCsvButton" type="button">会計CSV</button>
+            <label class="inline-filter">形式
+              <select id="csvFormatFilter">
+                <option value="review">確認用CSV</option>
+                <option value="yayoi_review">弥生確認CSV</option>
+                <option value="yayoi_import">弥生取込CSV</option>
+              </select>
+            </label>
+            <label class="inline-filter">CSV
+              <select id="csvStatusFilter">
+                <option value="settlement_pending">精算待ち</option>
+                <option value="settled">精算済み</option>
+                <option value="all">全件</option>
+              </select>
+            </label>
+            <label class="inline-filter">表示
+              <select id="claimStatusFilter">
+                <option value="all">すべて</option>
+                <option value="ai_review">AI要確認</option>
+                <option value="actionable">自分の確認待ち</option>
+                <option value="manager_pending">店長承認待ち</option>
+                <option value="accounting_pending">経理確認待ち</option>
+                <option value="settlement_pending">精算待ち</option>
+                <option value="returned">差戻し</option>
+                <option value="settled">精算済み</option>
+              </select>
+            </label>
+            <button id="bulkApproveButton" class="secondary" type="button">選択を承認</button>
+            <button id="bulkSettleButton" class="secondary" type="button">選択を精算済み</button>
+          </div>
+          <span class="muted">承認・差戻し・精算は権限に応じて実行されます</span>
+        </div>
+        <div id="claimList" class="claim-list"></div>
+      </section>
+
+      <section data-view-section="admin" class="view-section admin-view">
+      <section id="employeePanel" class="panel" hidden>
+        <h2>社員管理</h2>
+        <form id="employeeForm" class="employee-form">
+          <input name="employeeId" type="hidden" />
+          <label>社員コード<input name="employeeCode" type="text" placeholder="例: NOV-0001" /></label>
+          <label>氏名<input name="name" type="text" required /></label>
+          <label>メール<input name="email" type="email" required /></label>
+          <label>法人<select name="corporationId"></select></label>
+          <label>店舗<select name="storeId"></select></label>
+          <label>部署<select name="departmentId"></select></label>
+          <label>役職<select name="positionId"></select></label>
+          <label>Firebase UID<input name="firebaseUid" type="text" placeholder="任意" /></label>
+          <label>在籍状態<select name="employmentStatus">
+            <option value="active">在籍</option>
+            <option value="inactive">退職・停止</option>
+          </select></label>
+          <div class="form-actions wide">
+            <button type="submit">保存</button>
+            <button id="employeeNewButton" class="secondary" type="button">新規入力</button>
+          </div>
+        </form>
+        <div id="employeeList" class="employee-list"></div>
+      </section>
+
+      <section id="permissionPanel" class="panel" hidden>
+        <h2>権限管理</h2>
+        <form id="permissionForm" class="permission-form">
+          <label>社員<select name="employeeId" required></select></label>
+          <label>権限<select name="roleCode" required></select></label>
+          <label>範囲<select name="scopeType" required>
+            <option value="global">全体</option>
+            <option value="store">店舗</option>
+            <option value="corporation">法人</option>
+          </select></label>
+          <label>対象<select name="scopeId"></select></label>
+          <button type="submit">付与</button>
+        </form>
+        <div id="permissionList" class="permission-list"></div>
+      </section>
+      </section>
+      </section>
+    </main>
+    <dialog id="workflowCommentDialog" class="comment-dialog">
+      <form method="dialog" id="workflowCommentForm">
+        <h2 id="workflowCommentTitle">コメント</h2>
+        <label>テンプレート
+          <select id="workflowCommentTemplate"></select>
+        </label>
+        <label>コメント
+          <textarea id="workflowCommentText" rows="5"></textarea>
+        </label>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary" type="submit">キャンセル</button>
+          <button value="ok" type="submit">実行</button>
+        </div>
+      </form>
+    </dialog>
+    <script src="./config.js"></script>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
+
+
