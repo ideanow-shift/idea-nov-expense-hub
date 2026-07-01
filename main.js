@@ -513,12 +513,38 @@ function renderProfile(employee) {
 }
 
 function hasRole(employee, roleCode) {
-  return Boolean((employee?.roles || []).some((role) => (role.role_code || role.code) === roleCode));
+  return Boolean((employee?.roles || []).some((role) => roleCodeAliases(roleCode).includes(role.role_code || role.code)));
+}
+
+function hasAnyRole(employee, roleCodes) {
+  return roleCodes.some((roleCode) => hasRole(employee, roleCode));
+}
+
+function roleCodeAliases(roleCode) {
+  const aliases = {
+    admin: ["admin", "super_admin"],
+    manager: ["manager", "store_manager", "area_manager", "department_manager"],
+    accounting: ["accounting", "super_admin"],
+    executive: ["executive", "super_admin"],
+    backoffice: ["backoffice", "super_admin"],
+  };
+  return aliases[roleCode] || [roleCode];
+}
+
+function canUseAccountingFeatures(employee = currentEmployee) {
+  return hasAnyRole(employee, ["accounting", "executive", "backoffice"]);
+}
+
+function canUseExecutiveFeatures(employee = currentEmployee) {
+  return hasRole(employee, "executive");
+}
+
+function canUseAdminFeatures(employee = currentEmployee) {
+  return hasAnyRole(employee, ["executive", "admin"]);
 }
 
 function defaultViewForEmployee(employee) {
-  if (hasRole(employee, "accounting")) return "accounting";
-  if (hasRole(employee, "executive")) return "dashboard";
+  if (canUseAccountingFeatures(employee)) return "accounting";
   if (hasRole(employee, "manager")) return "dashboard";
   return "input";
 }
@@ -547,9 +573,9 @@ function setActiveView(view) {
 
 function canAccessView(view) {
   if (!currentEmployee) return false;
-  if (view === "accounting") return hasRole(currentEmployee, "accounting") || hasRole(currentEmployee, "executive");
-  if (view === "admin") return hasRole(currentEmployee, "executive");
-  if (view === "reports") return hasRole(currentEmployee, "accounting") || hasRole(currentEmployee, "executive");
+  if (view === "accounting") return canUseAccountingFeatures();
+  if (view === "admin") return canUseAdminFeatures();
+  if (view === "reports") return canUseAccountingFeatures();
   return true;
 }
 
@@ -805,7 +831,7 @@ function monthlyReportKindLabel(report) {
 function renderMonthlyAccountingReports() {
   if (!monthlyAccountingPanel || !monthlyAccountingList) return;
 
-  const canAccounting = hasRole(currentEmployee, "accounting") || hasRole(currentEmployee, "executive");
+  const canAccounting = canUseAccountingFeatures();
   if (!canAccounting) {
     updateViewVisibility();
     return;
@@ -856,7 +882,7 @@ function renderMonthlyAccountingReports() {
 
 async function loadMonthlyCloseStatus() {
   if (!monthlyCloseStatus || !monthlyCloseButton) return;
-  const canAccounting = hasRole(currentEmployee, "accounting") || hasRole(currentEmployee, "executive");
+  const canAccounting = canUseAccountingFeatures();
   if (!canAccounting) {
     monthlyCloseStatus.textContent = "経理・幹部権限で表示されます。";
     monthlyCloseButton.disabled = true;
@@ -937,7 +963,7 @@ async function closeSelectedMonthlyPeriod() {
 }
 
 function canActOnMonthlyReport(report, action) {
-  const canAccounting = hasRole(currentEmployee, "accounting") || hasRole(currentEmployee, "executive");
+  const canAccounting = canUseAccountingFeatures();
   if (!canAccounting) return false;
   if (action === "approve" || action === "return") return report.status === "accounting_pending";
   if (action === "settle") return report.status === "settlement_pending";
@@ -1223,9 +1249,9 @@ function monthlyReportKindLabelForClaim(claim) {
 
 function canActOnClaim(row) {
   if (row.status === "manager_pending") return hasRole(currentEmployee, "manager") || hasRole(currentEmployee, "executive");
-  if (row.status === "accounting_pending") return hasRole(currentEmployee, "accounting") || hasRole(currentEmployee, "executive");
+  if (row.status === "accounting_pending") return canUseAccountingFeatures();
   if (row.status === "executive_pending") return hasRole(currentEmployee, "executive");
-  if (row.status === "settlement_pending") return hasRole(currentEmployee, "accounting") || hasRole(currentEmployee, "executive");
+  if (row.status === "settlement_pending") return canUseAccountingFeatures();
   return false;
 }
 
@@ -1249,7 +1275,7 @@ function renderRoleInsight() {
       note: "店舗の承認・差戻し対象",
     });
   }
-  if (hasRole(currentEmployee, "accounting")) {
+  if (canUseAccountingFeatures()) {
     insights.push({
       label: "経理確認",
       value: `${rows.filter((row) => row.status === "accounting_pending").length}件`,
@@ -1291,7 +1317,7 @@ function renderRoleInsight() {
 
 function renderAccountingOps() {
   if (!accountingOps) return;
-  if (!hasRole(currentEmployee, "accounting") && !hasRole(currentEmployee, "executive")) {
+  if (!canUseAccountingFeatures()) {
     accountingOps.innerHTML = `<p class="muted">経理・幹部権限で表示されます。</p>`;
     return;
   }
@@ -1358,7 +1384,7 @@ function renderAccountingOps() {
 
 async function loadExecutiveMonthlyReport() {
   if (!executiveMonthlyReport) return;
-  if (!hasRole(currentEmployee, "executive") && !hasRole(currentEmployee, "accounting")) {
+  if (!canUseAccountingFeatures()) {
     executiveMonthlyReport.innerHTML = `<p class="muted">幹部・経理権限で表示されます。</p>`;
     if (monthlyAiComment) monthlyAiComment.textContent = "幹部・経理権限で表示されます。";
     return;
@@ -1493,7 +1519,7 @@ function renderHighAmountClaims(rows) {
 }
 
 async function loadEmployeeAdmin() {
-  if (!hasRole(currentEmployee, "executive")) {
+  if (!canUseAdminFeatures()) {
     employeePanel.hidden = true;
     return;
   }
@@ -1605,7 +1631,7 @@ async function saveEmployee(event) {
 }
 
 async function loadPermissionAdmin() {
-  if (!hasRole(currentEmployee, "executive")) {
+  if (!canUseAdminFeatures()) {
     permissionPanel.hidden = true;
     return;
   }
@@ -2821,7 +2847,7 @@ async function recordAccountingExport({ csvFormat, csvStatus, fileName, rows }) 
 
 async function loadAccountingExportHistory() {
   if (!accountingExportHistory || !currentEmployee) return;
-  if (!hasRole(currentEmployee, "accounting") && !hasRole(currentEmployee, "executive")) {
+  if (!canUseAccountingFeatures()) {
     accountingExportHistory.innerHTML = `<p class="muted">経理権限で表示されます。</p>`;
     return;
   }
