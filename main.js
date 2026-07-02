@@ -15,6 +15,7 @@ const csvStatusFilter = document.querySelector("#csvStatusFilter");
 const csvScopeFilter = document.querySelector("#csvScopeFilter");
 const includeExportedCsvRows = document.querySelector("#includeExportedCsvRows");
 const accountingExportHistory = document.querySelector("#accountingExportHistory");
+const csvPreflight = document.querySelector("#csvPreflight");
 const claimStatusFilter = document.querySelector("#claimStatusFilter");
 const bulkApproveButton = document.querySelector("#bulkApproveButton");
 const bulkSettleButton = document.querySelector("#bulkSettleButton");
@@ -91,6 +92,10 @@ applyLastClaimButton.addEventListener("click", applyLastClaimDefaults);
 receiptInput.addEventListener("change", handleReceiptSelected);
 analyzeReceiptButton.addEventListener("click", analyzeReceipt);
 exportCsvButton.addEventListener("click", exportAccountingCsv);
+csvFormatFilter?.addEventListener("change", handleCsvFilterChange);
+csvStatusFilter?.addEventListener("change", handleCsvFilterChange);
+csvScopeFilter?.addEventListener("change", handleCsvFilterChange);
+includeExportedCsvRows?.addEventListener("change", renderCsvPreflight);
 claimStatusFilter.addEventListener("change", renderClaims);
 bulkApproveButton.addEventListener("click", () => runBulkWorkflowAction("approve"));
 bulkSettleButton.addEventListener("click", () => runBulkWorkflowAction("settle"));
@@ -1143,6 +1148,7 @@ async function loadClaims() {
   await loadAuditLogsForClaims(claimsCache);
   await loadExportedClaimHistoryForClaims(claimsCache);
   renderClaims();
+  renderCsvPreflight();
   renderRoleInsight();
   renderAccountingOps();
   renderProductionReadiness();
@@ -2876,11 +2882,82 @@ function setBulkButtonsDisabled(disabled) {
   if (clearSelectedClaimsButton) clearSelectedClaimsButton.disabled = disabled;
 }
 
+function handleCsvFilterChange() {
+  if (csvFormatFilter?.value === "yayoi_import" && csvStatusFilter?.value !== "settled") {
+    csvStatusFilter.value = "settled";
+  }
+  renderCsvPreflight();
+}
+
+function renderCsvPreflight() {
+  if (!csvPreflight) return;
+  if (!canUseAccountingFeatures()) {
+    csvPreflight.innerHTML = `<p class="muted">経理・幹部権限で表示されます。</p>`;
+    return;
+  }
+
+  const csvFormat = csvFormatFilter?.value || "review";
+  const csvStatus = csvStatusFilter?.value || "settlement_pending";
+  const csvScope = csvScopeFilter?.value || "all";
+  const includeAlreadyExported = Boolean(includeExportedCsvRows?.checked);
+
+  const checks = [
+    {
+      label: "出力形式",
+      value: csvFormatLabel(csvFormat),
+      ok: csvFormat !== "yayoi_import" || csvStatus === "settled",
+      note: csvFormat === "yayoi_import"
+        ? "弥生取込は精算済み明細を対象にします"
+        : "確認用として内容確認に使えます",
+    },
+    {
+      label: "対象ステータス",
+      value: csvStatusLabel(csvStatus),
+      ok: csvFormat !== "yayoi_import" || csvStatus === "settled",
+      note: csvStatus === "settled"
+        ? "会計取込向けの状態です"
+        : "未精算を出す場合は確認用CSVとして扱ってください",
+    },
+    {
+      label: "対象範囲",
+      value: csvScopeLabel(csvScope) || "すべて",
+      ok: true,
+      note: csvScope === "supplemental"
+        ? "締め後追加精算だけを出力します"
+        : csvScope === "regular"
+          ? "通常精算だけを出力します"
+          : "通常精算と締め後追加精算を含みます",
+    },
+    {
+      label: "二重出力",
+      value: includeAlreadyExported ? "出力済みも含める" : "出力済みを除外",
+      ok: !includeAlreadyExported,
+      note: includeAlreadyExported
+        ? "弥生へ二重取込しないか必ず確認してください"
+        : "CSV出力履歴がある明細は除外します",
+    },
+  ];
+
+  csvPreflight.innerHTML = checks.map((check) => `
+    <article class="csv-preflight-item ${check.ok ? "is-ok" : "is-warning"}">
+      <span>${escapeHtml(check.label)}</span>
+      <strong>${escapeHtml(check.value)}</strong>
+      <small>${escapeHtml(check.note)}</small>
+    </article>
+  `).join("");
+}
+
 async function exportAccountingCsv() {
   const csvFormat = csvFormatFilter?.value || "review";
   const csvStatus = csvStatusFilter?.value || "settlement_pending";
   const csvScope = csvScopeFilter?.value || "all";
   const includeAlreadyExported = Boolean(includeExportedCsvRows?.checked);
+
+  if (csvFormat === "yayoi_import" && csvStatus !== "settled") {
+    alert("弥生取込CSVは精算済み明細で出力してください。確認用に未精算を出す場合は、形式を確認用CSVに変更してください。");
+    return;
+  }
+
   const { data, error } = await supabase
     .schema("finance")
     .rpc("export_expense_accounting_csv", {
