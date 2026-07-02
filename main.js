@@ -1778,20 +1778,24 @@ function renderEmployeeList() {
     return;
   }
 
-  employeeList.innerHTML = employees.map((employee) => `
+  employeeList.innerHTML = employees.map((employee) => {
+    const positionName = displayPositionName(employee);
+    const jobTypeName = displayJobTypeName(employee);
+    return `
     <article class="employee-row">
       <div>
         <div class="claim-title">${escapeHtml(employee.name || employee.email)}</div>
         <div class="claim-meta">${escapeHtml(employee.email || "")} / ${escapeHtml(employee.employee_code || "コード未設定")}</div>
-        <div class="claim-meta">${escapeHtml(employee.corporation_name || "法人なし")} / ${escapeHtml(employee.store_name || "店舗なし")} / ${escapeHtml(employee.department_name || "部署なし")} / ${escapeHtml(employee.position_name || "役職なし")}</div>
-        <div class="claim-meta">職種: ${escapeHtml(employee.job_type_name || "未設定")}</div>
+        <div class="claim-meta">${escapeHtml(employee.corporation_name || "法人なし")} / ${escapeHtml(employee.store_name || "店舗なし")} / ${escapeHtml(employee.department_name || "部署なし")} / 役職: ${escapeHtml(positionName)}</div>
+        <div class="claim-meta">職種: ${escapeHtml(jobTypeName)}</div>
       </div>
       <div class="employee-actions">
         <span class="muted">${escapeHtml(employee.employment_status || "active")}</span>
         <button type="button" data-edit-employee="${escapeHtml(employee.id)}">確認</button>
       </div>
     </article>
-  `).join("");
+  `;
+  }).join("");
 
   employeeList.querySelectorAll("button[data-edit-employee]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -1809,11 +1813,26 @@ function fillEmployeeForm(employee) {
   employeeForm.elements.corporationId.value = employee.corporation_id || "";
   employeeForm.elements.storeId.value = employee.store_id || "";
   employeeForm.elements.departmentId.value = employee.department_id || "";
-  employeeForm.elements.positionId.value = employee.position_id || "";
+  employeeForm.elements.positionId.value = isJobTypeLabelInPosition(employee.position_name) ? "" : employee.position_id || "";
   employeeForm.elements.firebaseUid.value = employee.firebase_uid || "";
   employeeForm.elements.employmentStatus.value = employee.employment_status || "active";
   setEmployeeFormReadOnly();
   employeeForm.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function isJobTypeLabelInPosition(positionName) {
+  return ["レセプション"].includes(String(positionName || "").trim());
+}
+
+function displayPositionName(employee) {
+  if (isJobTypeLabelInPosition(employee.position_name)) return "未設定";
+  return employee.position_name || "役職なし";
+}
+
+function displayJobTypeName(employee) {
+  if (employee.job_type_name && employee.job_type_name !== "未設定") return employee.job_type_name;
+  if (isJobTypeLabelInPosition(employee.position_name)) return employee.position_name;
+  return "未設定";
 }
 
 function resetEmployeeForm() {
