@@ -856,6 +856,14 @@ input {
   font: inherit;
 }
 
+select {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font: inherit;
+  background: #fff;
+}
+
 textarea {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -933,6 +941,71 @@ textarea {
   color: var(--sub);
   font-size: 12px;
   text-align: right;
+}
+
+.transport-bulk-panel {
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+  padding: 14px;
+}
+
+.transport-bulk-panel h3 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.transport-bulk-controls {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.7fr) repeat(3, auto);
+  gap: 10px;
+  align-items: end;
+  margin: 10px 0;
+}
+
+.transport-bulk-panel textarea {
+  width: 100%;
+  min-height: 120px;
+}
+
+.transport-bulk-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.transport-candidate {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--soft);
+  padding: 10px;
+}
+
+.transport-candidate.is-error {
+  border-color: #f2a9a9;
+  background: #fff7f7;
+}
+
+.transport-candidate-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.transport-candidate-title {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.transport-candidate-status {
+  min-width: 100px;
+  text-align: right;
+  font-weight: 700;
 }
 
 .form-actions {

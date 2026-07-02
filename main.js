@@ -10,6 +10,13 @@ const receiptInput = document.querySelector("#receiptFile");
 const receiptStatus = document.querySelector("#receiptStatus");
 const analyzeReceiptButton = document.querySelector("#analyzeReceiptButton");
 const receiptBatchList = document.querySelector("#receiptBatchList");
+const transportBulkText = document.querySelector("#transportBulkText");
+const transportPaymentMethod = document.querySelector("#transportPaymentMethod");
+const parseTransportBulkButton = document.querySelector("#parseTransportBulkButton");
+const selectAllTransportButton = document.querySelector("#selectAllTransportButton");
+const saveTransportBulkButton = document.querySelector("#saveTransportBulkButton");
+const transportBulkStatus = document.querySelector("#transportBulkStatus");
+const transportBulkList = document.querySelector("#transportBulkList");
 const exportCsvButton = document.querySelector("#exportCsvButton");
 const csvFormatFilter = document.querySelector("#csvFormatFilter");
 const csvStatusFilter = document.querySelector("#csvStatusFilter");
@@ -72,6 +79,7 @@ const viewTabs = document.querySelector("#viewTabs");
 let uploadedReceiptPath = "";
 let uploadedReceiptMeta = null;
 let batchReceiptItems = [];
+let transportBulkCandidates = [];
 let currentEmployee = null;
 let employeeOptions = null;
 let permissionOptions = null;
@@ -95,6 +103,10 @@ applyLastClaimButton.addEventListener("click", applyLastClaimDefaults);
 receiptInput.addEventListener("change", handleReceiptSelected);
 analyzeReceiptButton.addEventListener("click", analyzeReceipt);
 receiptBatchList?.addEventListener("click", handleReceiptBatchClick);
+parseTransportBulkButton?.addEventListener("click", parseTransportBulkInput);
+selectAllTransportButton?.addEventListener("click", selectAllTransportCandidates);
+saveTransportBulkButton?.addEventListener("click", saveSelectedTransportCandidates);
+transportBulkList?.addEventListener("change", handleTransportCandidateChange);
 exportCsvButton.addEventListener("click", exportAccountingCsv);
 csvFormatFilter?.addEventListener("change", handleCsvFilterChange);
 csvStatusFilter?.addEventListener("change", handleCsvFilterChange);
@@ -2273,6 +2285,198 @@ async function saveBatchReceiptCandidate(index) {
   await loadDashboard();
   await loadClaims();
   await loadMonthlyReports();
+}
+
+function parseTransportBulkInput() {
+  const text = String(transportBulkText?.value || "").trim();
+  if (!text) {
+    transportBulkStatus.textContent = "交通費の明細を入力してください。";
+    return;
+  }
+
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length > 50) {
+    alert("交通費の一括入力は一度に50件までにしてください。");
+    return;
+  }
+
+  transportBulkCandidates = lines.map(parseTransportLine).filter(Boolean);
+  renderTransportBulkList();
+  transportBulkStatus.textContent = transportBulkCandidates.length
+    ? `${transportBulkCandidates.length}件の交通費候補を読み込みました。内容を確認してください。`
+    : "読み込める交通費候補がありませんでした。";
+}
+
+function parseTransportLine(line, index) {
+  const dateMatch = line.match(/(20\d{2})[\/\-.年](\d{1,2})[\/\-.月](\d{1,2})/);
+  const amountMatches = [...line.matchAll(/(\d{1,3}(?:,\d{3})+|\d+)\s*円?/g)];
+  const amountMatch = amountMatches.at(-1);
+  if (!dateMatch || !amountMatch) {
+    return {
+      id: crypto.randomUUID(),
+      selected: false,
+      status: "error",
+      error: "日付または金額を読み取れませんでした",
+      rawLine: line,
+      title: `交通費 ${index + 1}`,
+    };
+  }
+
+  const expenseDate = `${dateMatch[1]}-${dateMatch[2].padStart(2, "0")}-${dateMatch[3].padStart(2, "0")}`;
+  const amount = Number(amountMatch[1].replaceAll(",", ""));
+  const cleaned = line
+    .replace(dateMatch[0], "")
+    .replace(amountMatch[0], "")
+    .replace(/[,\t]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const route = cleaned || "交通費";
+  return {
+    id: crypto.randomUUID(),
+    selected: true,
+    status: "ready",
+    error: "",
+    rawLine: line,
+    expenseDate,
+    amount,
+    tax: 0,
+    route,
+    title: `${route} 交通費`,
+    vendor: route,
+    paymentMethod: transportPaymentMethod?.value || "立替",
+    purpose: "交通費",
+    accountTitleCandidate: "旅費交通費",
+  };
+}
+
+function renderTransportBulkList() {
+  if (!transportBulkList) return;
+  if (!transportBulkCandidates.length) {
+    transportBulkList.hidden = true;
+    transportBulkList.innerHTML = "";
+    return;
+  }
+
+  transportBulkList.hidden = false;
+  transportBulkList.innerHTML = transportBulkCandidates.map((item, index) => `
+    <article class="transport-candidate ${item.status === "error" ? "is-error" : ""}">
+      <label class="transport-candidate-check">
+        <input type="checkbox" data-transport-index="${index}" ${item.selected ? "checked" : ""} ${item.status === "saved" || item.status === "error" ? "disabled" : ""} />
+        <span>選択</span>
+      </label>
+      <div>
+        <div class="transport-candidate-title">${escapeHtml(item.title || item.rawLine)}</div>
+        <div class="muted">${escapeHtml(item.expenseDate || "日付未確定")} / ${item.amount ? Number(item.amount).toLocaleString("ja-JP") + "円" : "金額未確定"} / ${escapeHtml(item.paymentMethod || "")}</div>
+        <div class="muted">${escapeHtml(item.rawLine || "")}</div>
+        ${item.error ? `<div class="receipt-batch-warning">${escapeHtml(item.error)}</div>` : ""}
+      </div>
+      <div class="transport-candidate-status">${escapeHtml(transportStatusLabel(item.status))}</div>
+    </article>
+  `).join("");
+}
+
+function transportStatusLabel(status) {
+  return {
+    ready: "保存待ち",
+    saving: "保存中",
+    saved: "下書き保存済み",
+    error: "要確認",
+  }[status] || status;
+}
+
+function handleTransportCandidateChange(event) {
+  const input = event.target.closest("[data-transport-index]");
+  if (!input) return;
+  const index = Number(input.dataset.transportIndex);
+  if (!transportBulkCandidates[index]) return;
+  transportBulkCandidates[index].selected = input.checked;
+}
+
+function selectAllTransportCandidates() {
+  transportBulkCandidates = transportBulkCandidates.map((item) => ({
+    ...item,
+    selected: item.status === "ready" || item.status === "saving" ? true : item.selected,
+  }));
+  renderTransportBulkList();
+}
+
+async function saveSelectedTransportCandidates() {
+  const targets = transportBulkCandidates.filter((item) => item.selected && item.status === "ready");
+  if (!targets.length) {
+    transportBulkStatus.textContent = "保存対象の交通費候補がありません。";
+    return;
+  }
+
+  saveTransportBulkButton.disabled = true;
+  let savedCount = 0;
+  let errorCount = 0;
+
+  for (const item of targets) {
+    item.status = "saving";
+    renderTransportBulkList();
+    try {
+      await saveTransportCandidate(item);
+      item.status = "saved";
+      item.selected = false;
+      savedCount += 1;
+    } catch (error) {
+      item.status = "error";
+      item.error = error.message || String(error);
+      errorCount += 1;
+    }
+    transportBulkStatus.textContent = `${savedCount}/${targets.length}件を保存中...`;
+    renderTransportBulkList();
+  }
+
+  saveTransportBulkButton.disabled = false;
+  transportBulkStatus.textContent = errorCount
+    ? `${savedCount}件を下書き保存しました。${errorCount}件は確認が必要です。`
+    : `${savedCount}件の交通費を下書き保存しました。`;
+
+  await loadDashboard();
+  await loadClaims();
+  await loadMonthlyReports();
+}
+
+async function saveTransportCandidate(item) {
+  if (!item.expenseDate || !item.amount) throw new Error("日付と金額が必要です");
+  const fd = new FormData();
+  fd.set("title", item.title || "交通費");
+  fd.set("expenseDate", item.expenseDate);
+  fd.set("amount", String(item.amount));
+  fd.set("tax", String(item.tax || 0));
+  fd.set("vendor", item.vendor || item.route || "交通費");
+  fd.set("paymentMethod", item.paymentMethod || "立替");
+  fd.set("purpose", item.purpose || "交通費");
+  fd.set("accountTitleCandidate", item.accountTitleCandidate || "旅費交通費");
+  fd.set("highAmountReason", "");
+
+  const closeStatus = await getCloseStatusForExpenseDate(item.expenseDate);
+  if (closeStatus?.close_status === "closed") {
+    item.title = `${item.title}（締め後追加）`;
+  }
+
+  const { data, error } = await supabase
+    .schema("finance")
+    .rpc("create_expense_claim", {
+      p_title: fd.get("title"),
+      p_expense_date: fd.get("expenseDate"),
+      p_amount: Number(fd.get("amount")),
+      p_tax: Number(fd.get("tax") || 0),
+      p_vendor_name_raw: fd.get("vendor") || "",
+      p_payment_method: fd.get("paymentMethod") || "",
+      p_purpose: buildPurposeWithReason(fd),
+      p_ai_account_title_candidate: fd.get("accountTitleCandidate") || "",
+    });
+
+  if (error) throw error;
+
+  try {
+    await attachClaimToMonthlyReport(data, item.expenseDate);
+    setMonthlyFiscalMonthFromExpenseDate(item.expenseDate);
+  } catch (monthlyError) {
+    item.error = `明細は保存しましたが、月次追加に失敗しました: ${monthlyError.message}`;
+  }
 }
 
 function setField(name, value) {

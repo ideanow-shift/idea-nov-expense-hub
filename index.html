@@ -156,6 +156,32 @@
           <div id="claimPrecheck" class="precheck wide" hidden></div>
           <button class="save-claim-button" type="submit">明細保存</button>
         </form>
+
+        <section class="transport-bulk-panel">
+          <div class="section-header">
+            <h3>交通費一括入力</h3>
+            <span class="muted">日付・区間・金額をまとめて明細化します</span>
+          </div>
+          <div class="transport-bulk-controls">
+            <label>支払方法
+              <select id="transportPaymentMethod">
+                <option value="立替">立替</option>
+                <option value="交通系IC">交通系IC</option>
+                <option value="現金">現金</option>
+                <option value="カード">カード</option>
+              </select>
+            </label>
+            <button id="parseTransportBulkButton" type="button">交通費を読み込み</button>
+            <button id="selectAllTransportButton" class="secondary" type="button">すべて選択</button>
+            <button id="saveTransportBulkButton" type="button">選択を下書き保存</button>
+          </div>
+          <textarea id="transportBulkText" rows="5" placeholder="例:
+2026/07/01 所沢 - 池袋 片道 450
+2026/07/01 池袋 - 新宿 往復 360
+2026/07/02 所沢,立川,打合せ,620"></textarea>
+          <div id="transportBulkStatus" class="muted">交通費をまとめて入力できます。</div>
+          <div id="transportBulkList" class="transport-bulk-list" hidden></div>
+        </section>
       </section>
 
       <section data-view-section="monthly" class="view-section panel monthly-panel">
