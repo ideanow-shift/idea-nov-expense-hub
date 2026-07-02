@@ -17,6 +17,9 @@ const selectAllTransportButton = document.querySelector("#selectAllTransportButt
 const saveTransportBulkButton = document.querySelector("#saveTransportBulkButton");
 const transportBulkStatus = document.querySelector("#transportBulkStatus");
 const transportBulkList = document.querySelector("#transportBulkList");
+const pasmoPdfFile = document.querySelector("#pasmoPdfFile");
+const analyzePasmoPdfButton = document.querySelector("#analyzePasmoPdfButton");
+const pasmoPdfStatus = document.querySelector("#pasmoPdfStatus");
 const exportCsvButton = document.querySelector("#exportCsvButton");
 const csvFormatFilter = document.querySelector("#csvFormatFilter");
 const csvStatusFilter = document.querySelector("#csvStatusFilter");
@@ -107,6 +110,8 @@ parseTransportBulkButton?.addEventListener("click", parseTransportBulkInput);
 selectAllTransportButton?.addEventListener("click", selectAllTransportCandidates);
 saveTransportBulkButton?.addEventListener("click", saveSelectedTransportCandidates);
 transportBulkList?.addEventListener("change", handleTransportCandidateChange);
+pasmoPdfFile?.addEventListener("change", handlePasmoPdfSelected);
+analyzePasmoPdfButton?.addEventListener("click", analyzePasmoPdf);
 exportCsvButton.addEventListener("click", exportAccountingCsv);
 csvFormatFilter?.addEventListener("change", handleCsvFilterChange);
 csvStatusFilter?.addEventListener("change", handleCsvFilterChange);
@@ -2349,6 +2354,88 @@ function parseTransportLine(line, index) {
   };
 }
 
+function handlePasmoPdfSelected() {
+  const file = pasmoPdfFile?.files?.[0];
+  pasmoPdfStatus.textContent = file ? `${file.name} を選択中` : "PDF未選択";
+}
+
+async function analyzePasmoPdf() {
+  const file = pasmoPdfFile?.files?.[0];
+  if (!file) {
+    alert("PASMO明細PDFを選択してください。");
+    return;
+  }
+  if (file.type && file.type !== "application/pdf") {
+    alert("PDFファイルを選択してください。");
+    return;
+  }
+  const employeeId = currentEmployee?.id;
+  if (!employeeId) {
+    pasmoPdfStatus.textContent = "ログイン社員が未解決です。";
+    return;
+  }
+
+  analyzePasmoPdfButton.disabled = true;
+  pasmoPdfStatus.textContent = "PASMO PDFを保存中...";
+
+  try {
+    const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+    const path = `${employeeId}/pasmo/${crypto.randomUUID()}/${safeName}`;
+    const { error: uploadError } = await supabase.storage
+      .from("expense-receipts")
+      .upload(path, file, {
+        cacheControl: "3600",
+        contentType: "application/pdf",
+        upsert: false,
+      });
+    if (uploadError) throw uploadError;
+
+    pasmoPdfStatus.textContent = "PASMO PDFをAI解析中...";
+    const { data, error } = await supabase.functions.invoke("analyze-pasmo-pdf", {
+      body: { pdfPath: path },
+    });
+    if (error) throw error;
+
+    const imported = Array.isArray(data?.lines)
+      ? data.lines.map((line, index) => pasmoLineToTransportCandidate(line, index, { path, fileName: file.name }))
+      : [];
+    transportBulkCandidates = imported;
+    renderTransportBulkList();
+    const recommendedCount = imported.filter((item) => item.selected).length;
+    const excludedCount = imported.length - recommendedCount;
+    pasmoPdfStatus.textContent = `${recommendedCount}件を経費候補、${excludedCount}件を除外候補として読み込みました。`;
+    transportBulkStatus.textContent = "内容を確認して、必要な交通費だけ下書き保存してください。";
+  } catch (error) {
+    pasmoPdfStatus.textContent = error.message || String(error);
+  } finally {
+    analyzePasmoPdfButton.disabled = false;
+  }
+}
+
+function pasmoLineToTransportCandidate(line, index, sourcePdf) {
+  const recommended = line.recommended === true && line.usedDate && line.amount;
+  return {
+    id: crypto.randomUUID(),
+    selected: recommended,
+    status: recommended ? "ready" : "excluded",
+    error: recommended ? "" : line.exclusionReason || "経費候補から除外しました",
+    rawLine: line.rawText || line.route || `PASMO明細 ${index + 1}`,
+    expenseDate: line.usedDate || "",
+    amount: Number(line.amount || 0),
+    tax: 0,
+    route: line.route || line.rawText || "交通費",
+    title: `${line.route || "PASMO交通費"} 交通費`,
+    vendor: line.route || "PASMO",
+    paymentMethod: transportPaymentMethod?.value || "交通系IC",
+    purpose: "交通費",
+    accountTitleCandidate: "旅費交通費",
+    sourcePdfPath: sourcePdf.path,
+    sourcePdfFileName: sourcePdf.fileName,
+    sourcePdfMimeType: "application/pdf",
+    lineType: line.lineType || "transport",
+  };
+}
+
 function renderTransportBulkList() {
   if (!transportBulkList) return;
   if (!transportBulkCandidates.length) {
@@ -2359,7 +2446,7 @@ function renderTransportBulkList() {
 
   transportBulkList.hidden = false;
   transportBulkList.innerHTML = transportBulkCandidates.map((item, index) => `
-    <article class="transport-candidate ${item.status === "error" ? "is-error" : ""}">
+    <article class="transport-candidate ${item.status === "error" ? "is-error" : ""} ${item.status === "excluded" ? "is-excluded" : ""}">
       <label class="transport-candidate-check">
         <input type="checkbox" data-transport-index="${index}" ${item.selected ? "checked" : ""} ${item.status === "saved" || item.status === "error" ? "disabled" : ""} />
         <span>選択</span>
@@ -2380,6 +2467,7 @@ function transportStatusLabel(status) {
     ready: "保存待ち",
     saving: "保存中",
     saved: "下書き保存済み",
+    excluded: "除外候補",
     error: "要確認",
   }[status] || status;
 }
@@ -2390,18 +2478,22 @@ function handleTransportCandidateChange(event) {
   const index = Number(input.dataset.transportIndex);
   if (!transportBulkCandidates[index]) return;
   transportBulkCandidates[index].selected = input.checked;
+  if (input.checked && transportBulkCandidates[index].status === "excluded") {
+    transportBulkCandidates[index].status = "ready";
+  }
 }
 
 function selectAllTransportCandidates() {
   transportBulkCandidates = transportBulkCandidates.map((item) => ({
     ...item,
-    selected: item.status === "ready" || item.status === "saving" ? true : item.selected,
+    selected: item.status === "ready" || item.status === "saving" || item.status === "excluded" ? true : item.selected,
+    status: item.status === "excluded" ? "ready" : item.status,
   }));
   renderTransportBulkList();
 }
 
 async function saveSelectedTransportCandidates() {
-  const targets = transportBulkCandidates.filter((item) => item.selected && item.status === "ready");
+  const targets = transportBulkCandidates.filter((item) => item.selected && (item.status === "ready" || item.status === "excluded"));
   if (!targets.length) {
     transportBulkStatus.textContent = "保存対象の交通費候補がありません。";
     return;
@@ -2470,6 +2562,18 @@ async function saveTransportCandidate(item) {
     });
 
   if (error) throw error;
+
+  if (data?.id && item.sourcePdfPath) {
+    await supabase
+      .schema("finance")
+      .from("expense_receipts")
+      .insert({
+        expense_claim_id: data.id,
+        storage_path: item.sourcePdfPath,
+        file_name: item.sourcePdfFileName || "PASMO明細.pdf",
+        mime_type: item.sourcePdfMimeType || "application/pdf",
+      });
+  }
 
   try {
     await attachClaimToMonthlyReport(data, item.expenseDate);

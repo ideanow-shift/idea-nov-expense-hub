@@ -175,6 +175,13 @@
             <button id="selectAllTransportButton" class="secondary" type="button">すべて選択</button>
             <button id="saveTransportBulkButton" type="button">選択を下書き保存</button>
           </div>
+          <div class="transport-pasmo-import">
+            <label>PASMO明細PDF
+              <input id="pasmoPdfFile" type="file" accept="application/pdf" />
+            </label>
+            <button id="analyzePasmoPdfButton" class="secondary" type="button">PASMO PDF取込</button>
+            <span id="pasmoPdfStatus" class="muted">PDF未選択</span>
+          </div>
           <textarea id="transportBulkText" rows="5" placeholder="例:
 2026/07/01 所沢 - 池袋 片道 450
 2026/07/01 池袋 - 新宿 往復 360

@@ -964,6 +964,14 @@ textarea {
   margin: 10px 0;
 }
 
+.transport-pasmo-import {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto minmax(180px, 1fr);
+  gap: 10px;
+  align-items: end;
+  margin: 10px 0;
+}
+
 .transport-bulk-panel textarea {
   width: 100%;
   min-height: 120px;
@@ -989,6 +997,11 @@ textarea {
 .transport-candidate.is-error {
   border-color: #f2a9a9;
   background: #fff7f7;
+}
+
+.transport-candidate.is-excluded {
+  border-style: dashed;
+  opacity: 0.78;
 }
 
 .transport-candidate-check {
