@@ -277,14 +277,16 @@
                 <option value="settlement_pending">精算待ち</option>
                 <option value="returned">差戻し</option>
                 <option value="settled">精算済み</option>
+                <option value="cancelled">取消済み</option>
               </select>
             </label>
             <button id="selectVisibleClaimsButton" class="secondary" type="button">表示分を選択</button>
             <button id="clearSelectedClaimsButton" class="secondary" type="button">選択解除</button>
             <button id="bulkApproveButton" class="secondary" type="button">選択を承認</button>
             <button id="bulkSettleButton" class="secondary" type="button">選択を精算済み</button>
+            <button id="bulkCancelButton" class="secondary danger" type="button">選択を取消</button>
           </div>
-          <span class="muted">承認・差戻し・精算は権限に応じて実行されます</span>
+          <span class="muted">承認・差戻し・精算・取消は権限と状態に応じて実行されます</span>
         </div>
         <div class="export-history-panel">
           <h3>CSV出力履歴</h3>

@@ -105,6 +105,8 @@ button {
 }
 button:hover { background: var(--pink-hover); }
 button.secondary { background: var(--text); }
+button.danger { background: #8f3f46; }
+button.danger:hover { background: #763239; }
 button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -1352,6 +1354,9 @@ textarea {
 }
 .claim-actions .secondary {
   background: var(--text);
+}
+.claim-actions .danger {
+  background: #8f3f46;
 }
 .toolbar {
   display: flex;

@@ -30,6 +30,7 @@ const csvPreflight = document.querySelector("#csvPreflight");
 const claimStatusFilter = document.querySelector("#claimStatusFilter");
 const bulkApproveButton = document.querySelector("#bulkApproveButton");
 const bulkSettleButton = document.querySelector("#bulkSettleButton");
+const bulkCancelButton = document.querySelector("#bulkCancelButton");
 const selectVisibleClaimsButton = document.querySelector("#selectVisibleClaimsButton");
 const clearSelectedClaimsButton = document.querySelector("#clearSelectedClaimsButton");
 const profileLabel = document.querySelector("#profileLabel");
@@ -125,6 +126,7 @@ includeExportedCsvRows?.addEventListener("change", handleCsvFilterChange);
 claimStatusFilter.addEventListener("change", renderClaims);
 bulkApproveButton.addEventListener("click", () => runBulkWorkflowAction("approve"));
 bulkSettleButton.addEventListener("click", () => runBulkWorkflowAction("settle"));
+bulkCancelButton?.addEventListener("click", () => runBulkWorkflowAction("cancel"));
 selectVisibleClaimsButton?.addEventListener("click", selectVisibleClaims);
 clearSelectedClaimsButton?.addEventListener("click", clearSelectedClaims);
 markNotificationsReadButton.addEventListener("click", markNotificationsRead);
@@ -3334,6 +3336,7 @@ function actionLabel(action) {
     approve: "承認",
     return: "差戻し",
     settle: "精算",
+    cancel: "取消",
   }[action] || action;
 }
 
@@ -3348,24 +3351,35 @@ function formatDateTime(value) {
 }
 
 function renderActionButtons(row) {
+  const cancelButton = canCancelClaim(row)
+    ? `<button class="secondary danger" type="button" data-cancel-claim-id="${escapeHtml(row.id)}">取消</button>`
+    : "";
+
   if (row.status === "returned") {
-    return `<button class="secondary" type="button" data-resubmit-id="${escapeHtml(row.id)}">再申請</button>`;
+    return `
+      <button class="secondary" type="button" data-resubmit-id="${escapeHtml(row.id)}">再申請</button>
+      ${cancelButton}
+    `;
   }
 
-  if (!canActOnClaim(row)) return "";
+  if (!canActOnClaim(row)) return cancelButton;
 
   if (["manager_pending", "accounting_pending", "executive_pending"].includes(row.status)) {
     return `
       <button type="button" data-action="approve" data-id="${escapeHtml(row.id)}">承認</button>
       <button class="secondary" type="button" data-action="return" data-id="${escapeHtml(row.id)}">差戻し</button>
+      ${cancelButton}
     `;
   }
 
   if (row.status === "settlement_pending") {
-    return `<button type="button" data-action="settle" data-id="${escapeHtml(row.id)}">精算済み</button>`;
+    return `
+      <button type="button" data-action="settle" data-id="${escapeHtml(row.id)}">精算済み</button>
+      ${cancelButton}
+    `;
   }
 
-  return "";
+  return cancelButton;
 }
 
 function riskLabel(row) {
@@ -3391,6 +3405,12 @@ function bindClaimActions() {
     button.addEventListener("click", () => {
       const claim = claimsCache.find((row) => row.id === button.dataset.resubmitId);
       if (claim) fillClaimFormForResubmit(claim);
+    });
+  });
+
+  claimList.querySelectorAll("button[data-cancel-claim-id]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await cancelExpenseClaim(button.dataset.cancelClaimId);
     });
   });
 }
@@ -3430,6 +3450,7 @@ function workflowCommentLabel(action) {
     approve: "承認コメント",
     return: "差戻し理由",
     settle: "振込メモ",
+    cancel: "取消理由",
   }[action] || "コメント";
 }
 
@@ -3449,6 +3470,15 @@ function workflowCommentTemplates(action) {
     return [
       { label: "振込完了", value: "振込処理済み" },
       { label: "現金精算済み", value: "現金精算済み" },
+      { label: "その他", value: "" },
+    ];
+  }
+
+  if (action === "cancel") {
+    return [
+      { label: "入力ミス", value: "入力ミスのため取消" },
+      { label: "重複登録", value: "重複登録のため取消" },
+      { label: "経費対象外", value: "経費対象外のため取消" },
       { label: "その他", value: "" },
     ];
   }
@@ -3474,6 +3504,40 @@ function fillClaimFormForResubmit(claim) {
 
 function stripHighAmountReason(value) {
   return String(value || "").split(" / 高額理由:")[0].trim();
+}
+
+function canCancelClaim(claim) {
+  if (!claim || ["cancelled", "settled"].includes(claim.status)) return false;
+  if (exportedClaimCache.has(claim.id)) return false;
+  if (claim.applicant_employee_id === currentEmployee?.id && ["draft", "returned"].includes(claim.status)) return true;
+  return canUseAccountingFeatures() && ["draft", "returned", "manager_pending", "accounting_pending", "executive_pending", "settlement_pending"].includes(claim.status);
+}
+
+async function cancelExpenseClaim(expenseClaimId, defaultComment = "") {
+  const claim = claimsCache.find((row) => row.id === expenseClaimId);
+  if (!claim || !canCancelClaim(claim)) {
+    alert("現在の権限または状態では取消できません。");
+    return;
+  }
+
+  const comment = defaultComment || await requestWorkflowComment("cancel");
+  if (comment === null) return;
+  const label = claim.title || claim.vendor_name_raw || expenseClaimId;
+  if (!confirm(`「${label}」を取消します。\n集計・CSV対象から除外されますが、履歴は残ります。`)) return;
+
+  const { error } = await supabase
+    .schema("finance")
+    .rpc("cancel_expense_claim", {
+      p_expense_claim_id: expenseClaimId,
+      p_comment: comment,
+    });
+
+  if (error) {
+    alert(error.message);
+    return;
+  }
+
+  await refreshAll();
 }
 
 async function runMonthlyWorkflowAction(action, monthlyReportId) {
@@ -3554,7 +3618,7 @@ async function runBulkWorkflowAction(action) {
   }
 
   const skipped = selectedIds.length - targets.length;
-  const label = action === "settle" ? "精算済み" : "承認";
+  const label = action === "settle" ? "精算済み" : action === "cancel" ? "取消" : "承認";
   const message = skipped > 0
     ? `${targets.length}件を${label}します。${skipped}件は状態または権限のため対象外です。`
     : `${targets.length}件を${label}します。`;
@@ -3565,7 +3629,14 @@ async function runBulkWorkflowAction(action) {
   const errors = [];
 
   for (const claim of targets) {
-    const { error } = action === "settle"
+    const { error } = action === "cancel"
+      ? await supabase
+        .schema("finance")
+        .rpc("cancel_expense_claim", {
+          p_expense_claim_id: claim.id,
+          p_comment: "一括取消",
+        })
+      : action === "settle"
       ? await supabase
         .schema("finance")
         .rpc("settle_expense_claim", {
@@ -3617,6 +3688,7 @@ function clearSelectedClaims() {
 }
 
 function canBulkActOnClaim(claim, action) {
+  if (action === "cancel") return canCancelClaim(claim);
   if (action === "settle") return claim.status === "settlement_pending" && canActOnClaim(claim);
   if (action === "approve") return ["manager_pending", "accounting_pending", "executive_pending"].includes(claim.status) && canActOnClaim(claim);
   return false;
@@ -3625,6 +3697,7 @@ function canBulkActOnClaim(claim, action) {
 function setBulkButtonsDisabled(disabled) {
   bulkApproveButton.disabled = disabled;
   bulkSettleButton.disabled = disabled;
+  if (bulkCancelButton) bulkCancelButton.disabled = disabled;
   if (selectVisibleClaimsButton) selectVisibleClaimsButton.disabled = disabled;
   if (clearSelectedClaimsButton) clearSelectedClaimsButton.disabled = disabled;
 }
@@ -3912,6 +3985,7 @@ function claimFilterLabel(filter) {
     csv_exported: "CSV出力済み",
     csv_ready: "弥生取込対象",
     csv_done: "弥生出力済み",
+    cancelled: "取消済み",
     regular_monthly: "通常精算",
     supplemental_monthly: "締め後追加精算",
     actionable: "自分の確認待ち",
@@ -4089,6 +4163,7 @@ function statusLabel(status) {
     returned: "差戻し",
     settlement_pending: "精算待ち",
     settled: "精算済み",
+    cancelled: "取消済み",
   }[status] || status;
 }
 
