@@ -618,8 +618,10 @@ async function loadDashboard() {
   const dashboard = Array.isArray(data) ? data[0] : data;
   if (!dashboard) return;
   renderDashboardSummary(dashboard.summary || {});
-  renderRank(storeRank, dashboard.stores || [], "store_name");
-  renderRank(departmentRank, dashboard.departments || [], "department_name");
+  if (!selectedDashboardFiscalMonthDate()) {
+    renderRank(storeRank, dashboard.stores || [], "store_name");
+    renderRank(departmentRank, dashboard.departments || [], "department_name");
+  }
 }
 
 function renderDashboardSummary(summary) {
