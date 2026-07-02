@@ -1349,9 +1349,9 @@ function renderAccountingOps() {
     ? claimsCache.filter((row) => isClaimInFiscalMonth(row, fiscalMonth))
     : claimsCache;
   renderDashboardMonthSummary(dashboardClaims);
-  const settlementPending = dashboardClaims.filter((row) => row.status === "settlement_pending");
-  const csvUnexported = settlementPending.filter((row) => !exportedClaimCache.has(row.id));
-  const csvExported = settlementPending.filter((row) => exportedClaimCache.has(row.id));
+  const settledClaims = dashboardClaims.filter((row) => row.status === "settled");
+  const csvUnexported = settledClaims.filter((row) => !exportedClaimCache.has(row.id));
+  const csvExported = settledClaims.filter((row) => exportedClaimCache.has(row.id));
   const noReceipt = dashboardClaims.filter((row) => !Array.isArray(row.expense_receipts) || row.expense_receipts.length === 0);
   const aiReview = dashboardClaims.filter((row) => aiReviewFlags(row).length > 0);
   const highAmount = dashboardClaims.filter((row) => Number(row.amount || 0) >= 50000);
@@ -1360,15 +1360,15 @@ function renderAccountingOps() {
     {
       label: "CSV未出力",
       value: `${csvUnexported.length}件`,
-      note: "弥生取込前に出力が必要な精算待ち明細",
-      filter: "csv_unexported",
+      note: "弥生取込前に出力が必要な精算済み明細",
+      filter: "csv_ready",
       tone: csvUnexported.length ? "warning" : "ok",
     },
     {
       label: "CSV出力済み",
       value: `${csvExported.length}件`,
       note: "二重取込に注意する明細",
-      filter: "csv_exported",
+      filter: "csv_done",
       tone: "neutral",
     },
     {
@@ -1419,8 +1419,8 @@ function renderProductionReadiness() {
     ? monthlyReportsCache.filter((report) => report.fiscal_month === fiscalMonth)
     : monthlyReportsCache;
 
-  const settlementPending = monthClaims.filter((row) => row.status === "settlement_pending");
-  const csvUnexported = settlementPending.filter((row) => !exportedClaimCache.has(row.id));
+  const settledClaims = monthClaims.filter((row) => row.status === "settled");
+  const csvUnexported = settledClaims.filter((row) => !exportedClaimCache.has(row.id));
   const noReceipt = monthClaims.filter((row) => !Array.isArray(row.expense_receipts) || row.expense_receipts.length === 0);
   const pendingReports = monthReports.filter((report) => ["accounting_pending", "settlement_pending"].includes(report.status));
   const draftReports = monthReports.filter((report) => ["draft", "returned"].includes(report.status));
@@ -1431,8 +1431,8 @@ function renderProductionReadiness() {
       label: "弥生CSV未出力",
       value: `${csvUnexported.length}件`,
       ok: csvUnexported.length === 0,
-      note: csvUnexported.length ? "精算済みにする前にCSV出力対象を確認" : "二重取込リスクは低い状態です",
-      filter: "csv_unexported",
+      note: csvUnexported.length ? "弥生取込CSVの出力対象を確認" : "二重取込リスクは低い状態です",
+      filter: "csv_ready",
     }),
     readinessItem({
       label: "レシート未添付",
