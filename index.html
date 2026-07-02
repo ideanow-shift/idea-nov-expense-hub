@@ -299,7 +299,8 @@
 
       <section data-view-section="admin" class="view-section admin-view">
       <section id="employeePanel" class="panel" hidden>
-        <h2>社員管理</h2>
+        <h2>社員参照</h2>
+        <p class="muted">社員属性はCore DB / NOV HUB側を正本にします。経費精算管理システムでは参照のみ行います。</p>
         <form id="employeeForm" class="employee-form">
           <input name="employeeId" type="hidden" />
           <label>社員コード<input name="employeeCode" type="text" placeholder="例: NOV-0001" /></label>
@@ -315,8 +316,8 @@
             <option value="inactive">退職・停止</option>
           </select></label>
           <div class="form-actions wide">
-            <button type="submit">保存</button>
-            <button id="employeeNewButton" class="secondary" type="button">新規入力</button>
+            <button type="submit" disabled>Core DB参照のみ</button>
+            <button id="employeeNewButton" class="secondary" type="button">表示クリア</button>
           </div>
         </form>
         <div id="employeeList" class="employee-list"></div>

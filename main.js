@@ -1754,6 +1754,7 @@ async function loadEmployeeAdmin() {
   employeeOptions = Array.isArray(data) ? data[0] : data;
   employeePanel.hidden = false;
   renderEmployeeFormOptions();
+  setEmployeeFormReadOnly();
   renderEmployeeList();
 }
 
@@ -1783,10 +1784,11 @@ function renderEmployeeList() {
         <div class="claim-title">${escapeHtml(employee.name || employee.email)}</div>
         <div class="claim-meta">${escapeHtml(employee.email || "")} / ${escapeHtml(employee.employee_code || "コード未設定")}</div>
         <div class="claim-meta">${escapeHtml(employee.corporation_name || "法人なし")} / ${escapeHtml(employee.store_name || "店舗なし")} / ${escapeHtml(employee.department_name || "部署なし")} / ${escapeHtml(employee.position_name || "役職なし")}</div>
+        <div class="claim-meta">職種: ${escapeHtml(employee.job_type_name || "未設定")}</div>
       </div>
       <div class="employee-actions">
         <span class="muted">${escapeHtml(employee.employment_status || "active")}</span>
-        <button type="button" data-edit-employee="${escapeHtml(employee.id)}">編集</button>
+        <button type="button" data-edit-employee="${escapeHtml(employee.id)}">確認</button>
       </div>
     </article>
   `).join("");
@@ -1810,6 +1812,7 @@ function fillEmployeeForm(employee) {
   employeeForm.elements.positionId.value = employee.position_id || "";
   employeeForm.elements.firebaseUid.value = employee.firebase_uid || "";
   employeeForm.elements.employmentStatus.value = employee.employment_status || "active";
+  setEmployeeFormReadOnly();
   employeeForm.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
@@ -1817,34 +1820,21 @@ function resetEmployeeForm() {
   employeeForm.reset();
   employeeForm.elements.employeeId.value = "";
   employeeForm.elements.employmentStatus.value = "active";
+  setEmployeeFormReadOnly();
+}
+
+function setEmployeeFormReadOnly() {
+  if (!employeeForm) return;
+  [...employeeForm.elements].forEach((element) => {
+    if (element.name === "employeeId") return;
+    if (element.tagName === "BUTTON") return;
+    element.disabled = true;
+  });
 }
 
 async function saveEmployee(event) {
   event.preventDefault();
-  const fd = new FormData(employeeForm);
-  const { error } = await supabase
-    .schema("core")
-    .rpc("upsert_employee_admin", {
-      p_employee_id: nullIfEmpty(fd.get("employeeId")),
-      p_employee_code: nullIfEmpty(fd.get("employeeCode")),
-      p_email: fd.get("email"),
-      p_name: fd.get("name"),
-      p_corporation_id: nullIfEmpty(fd.get("corporationId")),
-      p_store_id: nullIfEmpty(fd.get("storeId")),
-      p_department_id: nullIfEmpty(fd.get("departmentId")),
-      p_position_id: nullIfEmpty(fd.get("positionId")),
-      p_firebase_uid: nullIfEmpty(fd.get("firebaseUid")),
-      p_employment_status: fd.get("employmentStatus") || "active",
-    });
-
-  if (error) {
-    alert(error.message);
-    return;
-  }
-
-  resetEmployeeForm();
-  await loadEmployeeAdmin();
-  await loadPermissionAdmin();
+  alert("社員属性はCore DB / NOV HUB側で管理します。経費精算管理システムでは更新しません。");
 }
 
 async function loadPermissionAdmin() {
