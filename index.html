@@ -107,20 +107,27 @@
 
       <section data-view-section="input" class="view-section panel claim-entry-panel">
         <h2>経費明細登録</h2>
+        <div class="input-mode-tabs" id="inputModeTabs">
+          <button type="button" data-input-mode="manual" class="active">手入力</button>
+          <button type="button" data-input-mode="receipt">レシートAI</button>
+          <button type="button" data-input-mode="transport">交通費まとめ入力</button>
+          <button type="button" data-input-mode="pasmo">PASMO PDF</button>
+        </div>
+        <div id="inputModeGuide" class="input-mode-guide">少額の通常経費を1件ずつ登録します。</div>
         <form id="claimForm" class="form-grid claim-form-compact">
           <div class="wide claim-assist">
             <button id="applyLastClaimButton" class="secondary" type="button">前回入力を使う</button>
             <span id="lastClaimHint" class="muted">前回の用途・支払方法・勘定科目候補を再利用できます</span>
           </div>
-          <label class="receipt-file-field">レシート
+          <label class="receipt-file-field receipt-mode-only">レシート
             <input id="receiptFile" name="receiptFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" multiple />
           </label>
-          <div class="receipt-actions">
+          <div class="receipt-actions receipt-mode-only">
             <button id="analyzeReceiptButton" type="button">レシートAI解析</button>
             <span id="receiptStatus" class="muted">レシート未選択</span>
           </div>
-          <div id="receiptBatchList" class="receipt-batch-list wide" hidden></div>
-          <details class="ocr-details">
+          <div id="receiptBatchList" class="receipt-batch-list wide receipt-mode-only" hidden></div>
+          <details class="ocr-details receipt-mode-only">
             <summary>OCR補助</summary>
             <textarea id="ocrText" name="ocrText" rows="3" placeholder="画像OCRが不安な場合だけ、レシート文字を貼り付け"></textarea>
           </details>
@@ -157,7 +164,7 @@
           <button class="save-claim-button" type="submit">明細保存</button>
         </form>
 
-        <section class="transport-bulk-panel">
+        <section class="transport-bulk-panel" hidden>
           <div class="section-header">
             <h3>交通費一括入力</h3>
             <span class="muted">日付・区間・金額をまとめて明細化します</span>
@@ -171,7 +178,7 @@
                 <option value="カード">カード</option>
               </select>
             </label>
-            <button id="parseTransportBulkButton" type="button">交通費を読み込み</button>
+            <button id="parseTransportBulkButton" class="transport-manual-only" type="button">交通費を読み込み</button>
             <button id="selectAllTransportButton" class="secondary" type="button">すべて選択</button>
             <button id="saveTransportBulkButton" type="button">選択を下書き保存</button>
           </div>
@@ -182,7 +189,7 @@
             <button id="analyzePasmoPdfButton" class="secondary" type="button">PASMO PDF取込</button>
             <span id="pasmoPdfStatus" class="muted">PDF未選択</span>
           </div>
-          <textarea id="transportBulkText" rows="5" placeholder="例:
+          <textarea id="transportBulkText" class="transport-manual-only" rows="5" placeholder="例:
 2026/07/01 所沢 - 池袋 片道 450
 2026/07/01 池袋 - 新宿 往復 360
 2026/07/02 所沢,立川,打合せ,620"></textarea>

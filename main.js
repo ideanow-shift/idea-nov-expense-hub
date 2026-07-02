@@ -78,6 +78,9 @@ const monthlyCloseButton = document.querySelector("#monthlyCloseButton");
 const monthlyCloseFiscalMonth = document.querySelector("#monthlyCloseFiscalMonth");
 const dashboardFiscalMonth = document.querySelector("#dashboardFiscalMonth");
 const viewTabs = document.querySelector("#viewTabs");
+const inputModeTabs = document.querySelector("#inputModeTabs");
+const inputModeGuide = document.querySelector("#inputModeGuide");
+const transportBulkPanel = document.querySelector(".transport-bulk-panel");
 
 let uploadedReceiptPath = "";
 let uploadedReceiptMeta = null;
@@ -96,7 +99,9 @@ let pendingClaimId = "";
 let notificationsCache = [];
 let auditLogCache = new Map();
 let exportedClaimCache = new Map();
+let pasmoAuditCache = new Map();
 let closeStatusCache = new Map();
+let activeInputMode = "manual";
 
 document.querySelector("#refreshButton").addEventListener("click", refreshAll);
 claimForm.addEventListener("submit", submitClaim);
@@ -138,6 +143,7 @@ employeeNewButton.addEventListener("click", resetEmployeeForm);
 permissionForm.addEventListener("submit", assignPermission);
 permissionForm.elements.scopeType.addEventListener("change", updatePermissionScopeOptions);
 viewTabs?.addEventListener("click", handleViewTabClick);
+inputModeTabs?.addEventListener("click", handleInputModeTabClick);
 
 await initialize();
 
@@ -595,6 +601,12 @@ function handleViewTabClick(event) {
   setActiveView(button.dataset.viewTab);
 }
 
+function handleInputModeTabClick(event) {
+  const button = event.target.closest("button[data-input-mode]");
+  if (!button) return;
+  setInputMode(button.dataset.inputMode);
+}
+
 function setActiveView(view) {
   if (!canAccessView(view)) return;
   activeView = view;
@@ -624,6 +636,48 @@ function updateViewVisibility() {
     button.disabled = !allowed;
     button.classList.toggle("is-active", view === activeView && allowed);
   });
+
+  if (activeView === "input") setInputMode(activeInputMode);
+}
+
+function setInputMode(mode) {
+  activeInputMode = ["manual", "receipt", "transport", "pasmo"].includes(mode) ? mode : "manual";
+  const isFormMode = activeInputMode === "manual" || activeInputMode === "receipt";
+  const isReceiptMode = activeInputMode === "receipt";
+  const isTransportMode = activeInputMode === "transport";
+  const isPasmoMode = activeInputMode === "pasmo";
+
+  if (claimForm) claimForm.hidden = !isFormMode;
+  if (transportBulkPanel) transportBulkPanel.hidden = !(isTransportMode || isPasmoMode);
+
+  document.querySelectorAll(".receipt-mode-only").forEach((element) => {
+    element.hidden = !isReceiptMode;
+  });
+  document.querySelectorAll(".transport-manual-only").forEach((element) => {
+    element.hidden = !isTransportMode;
+  });
+  document.querySelectorAll(".transport-pasmo-import").forEach((element) => {
+    element.hidden = !isPasmoMode;
+  });
+
+  inputModeTabs?.querySelectorAll("button[data-input-mode]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.inputMode === activeInputMode);
+  });
+
+  if (inputModeGuide) {
+    inputModeGuide.textContent = {
+      manual: "少額の通常経費を1件ずつ登録します。",
+      receipt: "レシート画像やPDFを読み込み、AI解析結果をフォームへ反映します。",
+      transport: "交通費を複数行まとめて貼り付け、必要な行だけ下書き保存します。",
+      pasmo: "PASMO明細PDFから交通費候補を抽出し、物販やチャージは除外候補にします。",
+    }[activeInputMode];
+  }
+
+  if (isPasmoMode) {
+    transportBulkStatus.textContent = "PASMO PDFを選択して取込してください。交通費候補だけを選んで下書き保存できます。";
+  } else if (isTransportMode) {
+    transportBulkStatus.textContent = "交通費をまとめて入力できます。";
+  }
 }
 
 async function loadDashboard() {
@@ -1170,12 +1224,47 @@ async function loadClaims() {
   claimsCache = data || [];
   await loadAuditLogsForClaims(claimsCache);
   await loadExportedClaimHistoryForClaims(claimsCache);
+  await loadPasmoAuditForClaims(claimsCache);
   renderClaims();
   renderCsvPreflight();
   renderRoleInsight();
   renderAccountingOps();
   renderProductionReadiness();
   await loadExecutiveMonthlyReport();
+}
+
+async function loadPasmoAuditForClaims(rows) {
+  pasmoAuditCache = new Map();
+  const ids = rows.map((row) => row.id).filter(Boolean);
+  if (!ids.length) return;
+
+  const { data, error } = await supabase
+    .schema("finance")
+    .from("pasmo_import_lines")
+    .select(`
+      id,
+      expense_claim_id,
+      line_index,
+      raw_text,
+      route,
+      amount,
+      used_date,
+      saved_at,
+      pasmo_import_batches (
+        source_file_name,
+        created_at
+      )
+    `)
+    .in("expense_claim_id", ids);
+
+  if (error) {
+    console.warn(error);
+    return;
+  }
+
+  (data || []).forEach((row) => {
+    if (row.expense_claim_id) pasmoAuditCache.set(row.expense_claim_id, row);
+  });
 }
 
 async function loadExportedClaimHistoryForClaims(rows) {
@@ -3117,6 +3206,7 @@ function renderClaim(row) {
         <div class="claim-meta">AI勘定科目候補: ${escapeHtml(row.ai_account_title_candidate || "未設定")} / リスク: ${escapeHtml(riskLabel(row))}</div>
         ${renderMonthlyKindBadge(row)}
         ${renderCsvExportBadge(row.id)}
+        ${renderPasmoAuditBadge(row.id)}
         ${flags.length ? renderReviewFlags(flags) : ""}
         ${renderAuditTrail(row.id)}
       </div>
@@ -3125,6 +3215,22 @@ function renderClaim(row) {
         ${renderActionButtons(row)}
       </div>
     </article>
+  `;
+}
+
+function renderPasmoAuditBadge(expenseClaimId) {
+  const audit = pasmoAuditCache.get(expenseClaimId);
+  if (!audit) return "";
+
+  const fileName = audit.pasmo_import_batches?.source_file_name || "PASMO明細PDF";
+  const lineNo = Number(audit.line_index || 0) + 1;
+  const savedAt = audit.saved_at ? ` / ${formatDateTime(audit.saved_at)}` : "";
+  const route = audit.route || audit.raw_text || "交通費";
+
+  return `
+    <div class="pasmo-audit-badge">
+      PASMO証跡あり ${escapeHtml(fileName)} / ${lineNo}行目 / ${escapeHtml(route)}${escapeHtml(savedAt)}
+    </div>
   `;
 }
 
