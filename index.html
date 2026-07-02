@@ -269,6 +269,7 @@
                 <option value="csv_exported">CSV出力済み</option>
                 <option value="csv_ready">弥生取込対象</option>
                 <option value="csv_done">弥生出力済み</option>
+                <option value="cancellable">取消できる明細</option>
                 <option value="regular_monthly">通常精算</option>
                 <option value="supplemental_monthly">締め後追加精算</option>
                 <option value="actionable">自分の確認待ち</option>
@@ -287,6 +288,12 @@
             <button id="bulkCancelButton" class="secondary danger" type="button">選択を取消</button>
           </div>
           <span class="muted">承認・差戻し・精算・取消は権限と状態に応じて実行されます</span>
+        </div>
+        <div class="operation-guide">
+          <strong>操作の目安</strong>
+          <span>間違って登録した明細は「取消」で集計・CSV対象から外します。</span>
+          <span>精算済み・CSV出力済みは会計証跡保護のため取消できません。</span>
+          <span>迷ったら表示を「取消できる明細」に切り替えてください。</span>
         </div>
         <div class="export-history-panel">
           <h3>CSV出力履歴</h3>

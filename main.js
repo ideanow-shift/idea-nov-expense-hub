@@ -1355,6 +1355,9 @@ function filterClaims(rows) {
   if (filter === "csv_done") {
     return rows.filter((row) => row.status === "settled" && exportedClaimCache.has(row.id));
   }
+  if (filter === "cancellable") {
+    return rows.filter((row) => canCancelClaim(row));
+  }
   if (filter === "regular_monthly") {
     return rows.filter((row) => monthlyReportKindForClaim(row) === "regular");
   }
@@ -3351,9 +3354,7 @@ function formatDateTime(value) {
 }
 
 function renderActionButtons(row) {
-  const cancelButton = canCancelClaim(row)
-    ? `<button class="secondary danger" type="button" data-cancel-claim-id="${escapeHtml(row.id)}">取消</button>`
-    : "";
+  const cancelButton = renderCancelButton(row);
 
   if (row.status === "returned") {
     return `
@@ -3380,6 +3381,16 @@ function renderActionButtons(row) {
   }
 
   return cancelButton;
+}
+
+function renderCancelButton(row) {
+  if (canCancelClaim(row)) {
+    return `<button class="secondary danger" type="button" data-cancel-claim-id="${escapeHtml(row.id)}">取消</button>`;
+  }
+
+  const reason = cancelBlockedReason(row);
+  if (!reason) return "";
+  return `<button class="secondary muted-action" type="button" disabled title="${escapeHtml(reason)}">取消不可</button><small class="action-reason">${escapeHtml(reason)}</small>`;
 }
 
 function riskLabel(row) {
@@ -3511,6 +3522,17 @@ function canCancelClaim(claim) {
   if (exportedClaimCache.has(claim.id)) return false;
   if (claim.applicant_employee_id === currentEmployee?.id && ["draft", "returned"].includes(claim.status)) return true;
   return canUseAccountingFeatures() && ["draft", "returned", "manager_pending", "accounting_pending", "executive_pending", "settlement_pending"].includes(claim.status);
+}
+
+function cancelBlockedReason(claim) {
+  if (!claim) return "";
+  if (claim.status === "cancelled") return "すでに取消済みです";
+  if (claim.status === "settled") return "精算済みのため取消できません";
+  if (exportedClaimCache.has(claim.id)) return "CSV出力済みのため取消できません";
+  if (!["draft", "returned", "manager_pending", "accounting_pending", "executive_pending", "settlement_pending"].includes(claim.status)) {
+    return "この状態では取消できません";
+  }
+  return "権限がないため取消できません";
 }
 
 async function cancelExpenseClaim(expenseClaimId, defaultComment = "") {
@@ -3985,6 +4007,7 @@ function claimFilterLabel(filter) {
     csv_exported: "CSV出力済み",
     csv_ready: "弥生取込対象",
     csv_done: "弥生出力済み",
+    cancellable: "取消できる明細",
     cancelled: "取消済み",
     regular_monthly: "通常精算",
     supplemental_monthly: "締め後追加精算",
