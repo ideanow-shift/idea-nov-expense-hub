@@ -2396,14 +2396,28 @@ async function analyzePasmoPdf() {
     });
     if (error) throw error;
 
-    const imported = Array.isArray(data?.lines)
-      ? data.lines.map((line, index) => pasmoLineToTransportCandidate(line, index, { path, fileName: file.name }))
+    const sourcePdf = { path, fileName: file.name, mimeType: "application/pdf" };
+    const lines = Array.isArray(data?.lines) ? data.lines : [];
+    let auditLines = [];
+    let auditSaved = false;
+    try {
+      const audit = await savePasmoImportAudit({ ...sourcePdf, lines });
+      auditLines = audit.lines || [];
+      auditSaved = true;
+    } catch (auditError) {
+      pasmoPdfStatus.textContent = `PASMO PDFを解析しましたが、監査保存に失敗しました: ${auditError.message || auditError}`;
+    }
+
+    const imported = lines.length
+      ? lines.map((line, index) => pasmoLineToTransportCandidate(line, index, sourcePdf, auditLines[index], auditSaved))
       : [];
     transportBulkCandidates = imported;
     renderTransportBulkList();
     const recommendedCount = imported.filter((item) => item.selected).length;
     const excludedCount = imported.length - recommendedCount;
-    pasmoPdfStatus.textContent = `${recommendedCount}件を経費候補、${excludedCount}件を除外候補として読み込みました。`;
+    pasmoPdfStatus.textContent = auditSaved
+      ? `${recommendedCount}件を経費候補、${excludedCount}件を除外候補として読み込みました。監査記録も保存済みです。`
+      : `${recommendedCount}件を経費候補、${excludedCount}件を除外候補として読み込みました。`;
     transportBulkStatus.textContent = "内容を確認して、必要な交通費だけ下書き保存してください。";
   } catch (error) {
     pasmoPdfStatus.textContent = error.message || String(error);
@@ -2412,7 +2426,29 @@ async function analyzePasmoPdf() {
   }
 }
 
-function pasmoLineToTransportCandidate(line, index, sourcePdf) {
+async function savePasmoImportAudit({ path, fileName, mimeType, lines }) {
+  const { data: batch, error } = await supabase
+    .schema("finance")
+    .rpc("create_pasmo_import_batch", {
+      p_source_storage_path: path,
+      p_source_file_name: fileName,
+      p_source_mime_type: mimeType || "application/pdf",
+      p_lines: lines,
+    });
+  if (error) throw error;
+
+  const { data: savedLines, error: linesError } = await supabase
+    .schema("finance")
+    .from("pasmo_import_lines")
+    .select("id,line_index")
+    .eq("batch_id", batch.id)
+    .order("line_index", { ascending: true });
+  if (linesError) throw linesError;
+
+  return { batch, lines: savedLines || [] };
+}
+
+function pasmoLineToTransportCandidate(line, index, sourcePdf, auditLine, auditSaved) {
   const recommended = line.recommended === true && line.usedDate && line.amount;
   return {
     id: crypto.randomUUID(),
@@ -2431,8 +2467,11 @@ function pasmoLineToTransportCandidate(line, index, sourcePdf) {
     accountTitleCandidate: "旅費交通費",
     sourcePdfPath: sourcePdf.path,
     sourcePdfFileName: sourcePdf.fileName,
-    sourcePdfMimeType: "application/pdf",
+    sourcePdfMimeType: sourcePdf.mimeType || "application/pdf",
     lineType: line.lineType || "transport",
+    pasmoLineId: auditLine?.id || null,
+    pasmoLineIndex: auditLine?.line_index ?? index,
+    auditSaved: auditSaved && Boolean(auditLine?.id),
   };
 }
 
@@ -2454,7 +2493,7 @@ function renderTransportBulkList() {
       <div>
         <div class="transport-candidate-title">${escapeHtml(item.title || item.rawLine)}</div>
         <div class="muted">${escapeHtml(item.expenseDate || "日付未確定")} / ${item.amount ? Number(item.amount).toLocaleString("ja-JP") + "円" : "金額未確定"} / ${escapeHtml(item.paymentMethod || "")}</div>
-        <div class="muted">${escapeHtml(item.rawLine || "")}</div>
+        <div class="muted">${escapeHtml(item.rawLine || "")}${item.auditSaved ? " / 監査保存済み" : ""}</div>
         ${item.error ? `<div class="receipt-batch-warning">${escapeHtml(item.error)}</div>` : ""}
       </div>
       <div class="transport-candidate-status">${escapeHtml(transportStatusLabel(item.status))}</div>
@@ -2573,6 +2612,18 @@ async function saveTransportCandidate(item) {
         file_name: item.sourcePdfFileName || "PASMO明細.pdf",
         mime_type: item.sourcePdfMimeType || "application/pdf",
       });
+  }
+
+  if (data?.id && item.pasmoLineId) {
+    const { error: auditError } = await supabase
+      .schema("finance")
+      .rpc("mark_pasmo_import_line_saved", {
+        p_line_id: item.pasmoLineId,
+        p_expense_claim_id: data.id,
+      });
+    if (auditError) {
+      item.error = `明細は保存しましたが、PASMO監査行の更新に失敗しました: ${auditError.message}`;
+    }
   }
 
   try {
