@@ -113,12 +113,13 @@
             <span id="lastClaimHint" class="muted">前回の用途・支払方法・勘定科目候補を再利用できます</span>
           </div>
           <label class="receipt-file-field">レシート
-            <input id="receiptFile" name="receiptFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" />
+            <input id="receiptFile" name="receiptFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" multiple />
           </label>
           <div class="receipt-actions">
             <button id="analyzeReceiptButton" type="button">レシートAI解析</button>
             <span id="receiptStatus" class="muted">レシート未選択</span>
           </div>
+          <div id="receiptBatchList" class="receipt-batch-list wide" hidden></div>
           <details class="ocr-details">
             <summary>OCR補助</summary>
             <textarea id="ocrText" name="ocrText" rows="3" placeholder="画像OCRが不安な場合だけ、レシート文字を貼り付け"></textarea>

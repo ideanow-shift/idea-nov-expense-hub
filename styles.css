@@ -873,6 +873,68 @@ textarea {
   flex-wrap: wrap;
 }
 
+.receipt-batch-list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--soft);
+  padding: 10px;
+}
+
+.receipt-batch-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.receipt-batch-items {
+  display: grid;
+  gap: 8px;
+}
+
+.receipt-batch-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+  padding: 10px;
+}
+
+.receipt-batch-card.is-error {
+  border-color: #f2a9a9;
+  background: #fff7f7;
+}
+
+.receipt-batch-title {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.receipt-batch-warning {
+  margin-top: 4px;
+  color: #9a6200;
+  font-size: 12px;
+}
+
+.receipt-batch-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.receipt-batch-status {
+  min-width: 72px;
+  color: var(--sub);
+  font-size: 12px;
+  text-align: right;
+}
+
 .form-actions {
   display: flex;
   align-items: center;

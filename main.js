@@ -9,6 +9,7 @@ const claimForm = document.querySelector("#claimForm");
 const receiptInput = document.querySelector("#receiptFile");
 const receiptStatus = document.querySelector("#receiptStatus");
 const analyzeReceiptButton = document.querySelector("#analyzeReceiptButton");
+const receiptBatchList = document.querySelector("#receiptBatchList");
 const exportCsvButton = document.querySelector("#exportCsvButton");
 const csvFormatFilter = document.querySelector("#csvFormatFilter");
 const csvStatusFilter = document.querySelector("#csvStatusFilter");
@@ -69,6 +70,8 @@ const dashboardFiscalMonth = document.querySelector("#dashboardFiscalMonth");
 const viewTabs = document.querySelector("#viewTabs");
 
 let uploadedReceiptPath = "";
+let uploadedReceiptMeta = null;
+let batchReceiptItems = [];
 let currentEmployee = null;
 let employeeOptions = null;
 let permissionOptions = null;
@@ -91,6 +94,7 @@ claimForm.addEventListener("click", handleClaimFormClick);
 applyLastClaimButton.addEventListener("click", applyLastClaimDefaults);
 receiptInput.addEventListener("change", handleReceiptSelected);
 analyzeReceiptButton.addEventListener("click", analyzeReceipt);
+receiptBatchList?.addEventListener("click", handleReceiptBatchClick);
 exportCsvButton.addEventListener("click", exportAccountingCsv);
 csvFormatFilter?.addEventListener("change", handleCsvFilterChange);
 csvStatusFilter?.addEventListener("change", handleCsvFilterChange);
@@ -1881,43 +1885,83 @@ async function removePermission({ employeeId, roleCode, scopeType, scopeId }) {
 
 async function handleReceiptSelected() {
   uploadedReceiptPath = "";
-  const file = receiptInput.files?.[0];
-  if (!file) {
+  uploadedReceiptMeta = null;
+  batchReceiptItems = [];
+  renderReceiptBatchList();
+
+  const files = Array.from(receiptInput.files || []);
+  if (!files.length) {
     receiptStatus.textContent = "レシート未選択";
     return;
   }
 
-  receiptStatus.textContent = `${file.name} を準備中...`;
+  if (files.length > 10) {
+    receiptInput.value = "";
+    receiptStatus.textContent = "一度に読み込めるレシートは10枚までです。";
+    alert("一度に読み込めるレシートは10枚までです。");
+    return;
+  }
+
+  receiptStatus.textContent = files.length === 1
+    ? `${files[0].name} を準備中...`
+    : `${files.length}枚のレシートをアップロード中...`;
 
   try {
-    const uploadFile = file.type.startsWith("image/")
-      ? await compressImage(file)
-      : file;
     const employeeId = currentEmployee?.id;
     if (!employeeId) {
       receiptStatus.textContent = "ログイン社員が未解決です。先にAuth/Core DB連携を確認してください。";
       return;
     }
 
-    const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-    const path = `${employeeId}/${crypto.randomUUID()}/${safeName}`;
-    const { error } = await supabase.storage
-      .from("expense-receipts")
-      .upload(path, uploadFile, {
-        cacheControl: "3600",
-        contentType: uploadFile.type || file.type,
-        upsert: false,
+    for (const file of files) {
+      const uploaded = await uploadReceiptFile(file, employeeId);
+      batchReceiptItems.push({
+        ...uploaded,
+        status: "uploaded",
+        result: null,
+        error: "",
       });
+      renderReceiptBatchList();
+    }
 
-    if (error) throw error;
-    uploadedReceiptPath = path;
-    receiptStatus.textContent = "レシートをアップロードしました";
+    uploadedReceiptPath = batchReceiptItems[0]?.path || "";
+    uploadedReceiptMeta = batchReceiptItems[0] || null;
+    receiptStatus.textContent = files.length === 1
+      ? "レシートをアップロードしました"
+      : `${files.length}枚をアップロードしました。レシートAI解析でまとめて解析できます。`;
   } catch (error) {
     receiptStatus.textContent = error.message || String(error);
   }
 }
 
+async function uploadReceiptFile(file, employeeId) {
+  const uploadFile = file.type.startsWith("image/")
+    ? await compressImage(file)
+    : file;
+  const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+  const path = `${employeeId}/${crypto.randomUUID()}/${safeName}`;
+  const { error } = await supabase.storage
+    .from("expense-receipts")
+    .upload(path, uploadFile, {
+      cacheControl: "3600",
+      contentType: uploadFile.type || file.type,
+      upsert: false,
+    });
+
+  if (error) throw error;
+  return {
+    path,
+    fileName: file.name,
+    mimeType: uploadFile.type || file.type || "",
+  };
+}
+
 async function analyzeReceipt() {
+  if (batchReceiptItems.length > 1) {
+    await analyzeReceiptBatch();
+    return;
+  }
+
   const ocrText = document.querySelector("#ocrText").value;
   if (!uploadedReceiptPath && !ocrText.trim()) {
     alert("レシート画像を選ぶか、OCRテキストを入力してください。");
@@ -1953,10 +1997,68 @@ async function analyzeReceipt() {
     data = parseReceiptTextFallback(ocrText);
     receiptStatus.textContent = "Edge Function未接続のため、入力テキストから簡易解析しました。";
   } else {
-    receiptStatus.textContent = "AI解析が完了しました。内容を確認してください。";
+    const warning = Array.isArray(data?.warnings) && data.warnings.length ? ` / ${data.warnings[0]}` : "";
+    receiptStatus.textContent = data?.source === "text_fallback"
+      ? `OCR補助テキストから簡易解析しました。内容を確認してください。${warning}`
+      : `レシート画像のAI解析が完了しました。内容を確認してください。${warning}`;
   }
 
   fillFormFromReceipt(data || {});
+  if (batchReceiptItems.length === 1) {
+    batchReceiptItems[0].result = data || null;
+    batchReceiptItems[0].status = data ? "analyzed" : batchReceiptItems[0].status;
+    batchReceiptItems[0].error = error?.message || "";
+    renderReceiptBatchList();
+  }
+}
+
+async function analyzeReceiptBatch() {
+  const ocrText = document.querySelector("#ocrText").value;
+  if (!batchReceiptItems.length) {
+    alert("レシート画像を選んでください。");
+    return;
+  }
+
+  analyzeReceiptButton.disabled = true;
+  let doneCount = 0;
+  let errorCount = 0;
+
+  for (const item of batchReceiptItems) {
+    if (item.status === "saved") {
+      doneCount += 1;
+      continue;
+    }
+
+    item.status = "analyzing";
+    item.error = "";
+    renderReceiptBatchList();
+    receiptStatus.textContent = `${doneCount + 1}/${batchReceiptItems.length}枚目をAI解析中...`;
+
+    try {
+      const { data, error } = await supabase.functions.invoke("analyze-receipt", {
+        body: {
+          receiptPath: item.path,
+          ocrText,
+        },
+      });
+      if (error) throw error;
+      item.result = data || {};
+      item.status = "analyzed";
+      doneCount += 1;
+    } catch (error) {
+      item.status = "error";
+      item.error = error.message || String(error);
+      errorCount += 1;
+    }
+    renderReceiptBatchList();
+  }
+
+  analyzeReceiptButton.disabled = false;
+  const firstAnalyzed = batchReceiptItems.find((item) => item.status === "analyzed" && item.result);
+  if (firstAnalyzed) applyBatchReceiptToForm(batchReceiptItems.indexOf(firstAnalyzed), { silent: true });
+  receiptStatus.textContent = errorCount
+    ? `${doneCount}件を解析しました。${errorCount}件は確認が必要です。`
+    : `${doneCount}件のレシートAI解析が完了しました。候補を確認してください。`;
 }
 
 function parseReceiptTextFallback(text) {
@@ -2012,6 +2114,165 @@ function fillFormFromReceipt(data) {
   setField("title", title);
   suggestMissingClaimFields();
   updateExpenseDateMonthHint(data.expenseDate);
+}
+
+function renderReceiptBatchList() {
+  if (!receiptBatchList) return;
+  if (!batchReceiptItems.length) {
+    receiptBatchList.hidden = true;
+    receiptBatchList.innerHTML = "";
+    return;
+  }
+
+  receiptBatchList.hidden = false;
+  const isBatch = batchReceiptItems.length > 1;
+  receiptBatchList.innerHTML = `
+    <div class="receipt-batch-header">
+      <strong>${isBatch ? "まとめ読み込み候補" : "レシート候補"}</strong>
+      <span class="muted">${batchReceiptItems.length}枚 / 最大10枚</span>
+    </div>
+    <div class="receipt-batch-items">
+      ${batchReceiptItems.map((item, index) => renderReceiptBatchItem(item, index)).join("")}
+    </div>
+  `;
+}
+
+function renderReceiptBatchItem(item, index) {
+  const result = item.result || {};
+  const title = result.vendor || item.fileName || `レシート${index + 1}`;
+  const amount = result.amount ? `${Number(result.amount).toLocaleString("ja-JP")}円` : "金額未確定";
+  const date = result.expenseDate || "日付未確定";
+  const statusLabel = {
+    uploaded: "未解析",
+    analyzing: "解析中",
+    analyzed: "解析済み",
+    saved: "下書き保存済み",
+    error: "要確認",
+  }[item.status] || item.status;
+  const warning = Array.isArray(result.warnings) && result.warnings.length ? result.warnings[0] : item.error;
+  const disabled = item.status === "analyzing" ? "disabled" : "";
+  return `
+    <article class="receipt-batch-card ${item.status === "error" ? "is-error" : ""}">
+      <div>
+        <div class="receipt-batch-title">${escapeHtml(title)}</div>
+        <div class="muted">${escapeHtml(date)} / ${escapeHtml(amount)} / ${escapeHtml(result.purposeCandidate || "用途未確定")}</div>
+        <div class="muted">${escapeHtml(item.fileName || "")}</div>
+        ${warning ? `<div class="receipt-batch-warning">${escapeHtml(warning)}</div>` : ""}
+      </div>
+      <div class="receipt-batch-actions">
+        <span class="receipt-batch-status">${escapeHtml(statusLabel)}</span>
+        <button type="button" class="secondary" data-batch-action="apply" data-index="${index}" ${result.amount ? "" : "disabled"}>フォームへ反映</button>
+        <button type="button" data-batch-action="save" data-index="${index}" ${result.amount && item.status !== "saved" ? disabled : "disabled"}>下書き保存</button>
+      </div>
+    </article>
+  `;
+}
+
+async function handleReceiptBatchClick(event) {
+  const button = event.target.closest("[data-batch-action]");
+  if (!button) return;
+  const index = Number(button.dataset.index);
+  const action = button.dataset.batchAction;
+  if (!Number.isInteger(index) || !batchReceiptItems[index]) return;
+
+  if (action === "apply") {
+    applyBatchReceiptToForm(index);
+    return;
+  }
+
+  if (action === "save") {
+    button.disabled = true;
+    await saveBatchReceiptCandidate(index);
+  }
+}
+
+function applyBatchReceiptToForm(index, options = {}) {
+  const item = batchReceiptItems[index];
+  if (!item?.result) return;
+  uploadedReceiptPath = item.path;
+  uploadedReceiptMeta = item;
+  fillFormFromReceipt(item.result);
+  receiptStatus.textContent = options.silent
+    ? receiptStatus.textContent
+    : `${item.fileName} の解析結果をフォームへ反映しました。`;
+}
+
+async function saveBatchReceiptCandidate(index) {
+  const item = batchReceiptItems[index];
+  if (!item?.result) return;
+  const result = item.result;
+  if (!result.expenseDate || !result.amount) {
+    alert("日付と金額が未確定のため保存できません。フォームへ反映して確認してください。");
+    return;
+  }
+
+  const title = result.vendor && result.amount
+    ? `${result.vendor} ${Number(result.amount).toLocaleString("ja-JP")}円`
+    : result.vendor || item.fileName || "レシート経費";
+  const fd = new FormData();
+  fd.set("title", title);
+  fd.set("expenseDate", result.expenseDate);
+  fd.set("amount", String(result.amount));
+  fd.set("tax", String(result.tax || 0));
+  fd.set("vendor", result.vendor || "");
+  fd.set("paymentMethod", result.paymentMethod || "");
+  fd.set("purpose", result.purposeCandidate || "備品購入");
+  fd.set("accountTitleCandidate", result.accountTitleCandidate || "消耗品費");
+  fd.set("highAmountReason", "");
+
+  const closeStatus = await getCloseStatusForExpenseDate(result.expenseDate);
+  if (closeStatus?.close_status === "closed" && !confirm(`${formatMonth(closeStatus.fiscal_month)} は月次締め済みです。この明細を締め後追加精算として保存しますか？`)) {
+    return;
+  }
+
+  const payload = {
+    p_title: fd.get("title"),
+    p_expense_date: fd.get("expenseDate"),
+    p_amount: Number(fd.get("amount")),
+    p_tax: Number(fd.get("tax") || 0),
+    p_vendor_name_raw: fd.get("vendor") || "",
+    p_payment_method: fd.get("paymentMethod") || "",
+    p_purpose: buildPurposeWithReason(fd),
+    p_ai_account_title_candidate: fd.get("accountTitleCandidate") || "",
+  };
+
+  const { data, error } = await supabase
+    .schema("finance")
+    .rpc("create_expense_claim", payload);
+
+  if (error) {
+    item.status = "error";
+    item.error = error.message;
+    renderReceiptBatchList();
+    alert(error.message);
+    return;
+  }
+
+  if (data?.id) {
+    await supabase
+      .schema("finance")
+      .from("expense_receipts")
+      .insert({
+        expense_claim_id: data.id,
+        storage_path: item.path,
+        file_name: item.fileName || "",
+        mime_type: item.mimeType || "",
+      });
+  }
+
+  try {
+    await attachClaimToMonthlyReport(data, result.expenseDate);
+    setMonthlyFiscalMonthFromExpenseDate(result.expenseDate);
+  } catch (monthlyError) {
+    item.error = `明細は保存しましたが、月次追加に失敗しました: ${monthlyError.message}`;
+  }
+
+  item.status = "saved";
+  renderReceiptBatchList();
+  receiptStatus.textContent = `${item.fileName} を下書き保存しました。`;
+  await loadDashboard();
+  await loadClaims();
+  await loadMonthlyReports();
 }
 
 function setField(name, value) {
@@ -2242,14 +2503,15 @@ async function submitClaim(event) {
   }
 
   if (uploadedReceiptPath && data?.id) {
+    const receiptMeta = uploadedReceiptMeta || batchReceiptItems.find((item) => item.path === uploadedReceiptPath);
     await supabase
       .schema("finance")
       .from("expense_receipts")
       .insert({
         expense_claim_id: data.id,
         storage_path: uploadedReceiptPath,
-        file_name: receiptInput.files?.[0]?.name || "",
-        mime_type: receiptInput.files?.[0]?.type || "",
+        file_name: receiptMeta?.fileName || receiptInput.files?.[0]?.name || "",
+        mime_type: receiptMeta?.mimeType || receiptInput.files?.[0]?.type || "",
       });
   }
 
@@ -2264,7 +2526,10 @@ async function submitClaim(event) {
   claimForm.reset();
   updateHighAmountReasonVisibility(0);
   uploadedReceiptPath = "";
+  uploadedReceiptMeta = null;
+  batchReceiptItems = [];
   receiptStatus.textContent = "レシート未選択";
+  renderReceiptBatchList();
   clearClaimPrecheck();
   renderLastClaimHint();
   await loadDashboard();
