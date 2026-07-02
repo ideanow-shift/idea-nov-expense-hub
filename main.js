@@ -95,7 +95,7 @@ exportCsvButton.addEventListener("click", exportAccountingCsv);
 csvFormatFilter?.addEventListener("change", handleCsvFilterChange);
 csvStatusFilter?.addEventListener("change", handleCsvFilterChange);
 csvScopeFilter?.addEventListener("change", handleCsvFilterChange);
-includeExportedCsvRows?.addEventListener("change", renderCsvPreflight);
+includeExportedCsvRows?.addEventListener("change", handleCsvFilterChange);
 claimStatusFilter.addEventListener("change", renderClaims);
 bulkApproveButton.addEventListener("click", () => runBulkWorkflowAction("approve"));
 bulkSettleButton.addEventListener("click", () => runBulkWorkflowAction("settle"));
@@ -1234,6 +1234,12 @@ function filterClaims(rows) {
   }
   if (filter === "csv_exported") {
     return rows.filter((row) => exportedClaimCache.has(row.id));
+  }
+  if (filter === "csv_ready") {
+    return rows.filter((row) => row.status === "settled" && !exportedClaimCache.has(row.id));
+  }
+  if (filter === "csv_done") {
+    return rows.filter((row) => row.status === "settled" && exportedClaimCache.has(row.id));
   }
   if (filter === "regular_monthly") {
     return rows.filter((row) => monthlyReportKindForClaim(row) === "regular");
@@ -2886,6 +2892,10 @@ function handleCsvFilterChange() {
   if (csvFormatFilter?.value === "yayoi_import" && csvStatusFilter?.value !== "settled") {
     csvStatusFilter.value = "settled";
   }
+  if (csvFormatFilter?.value === "yayoi_import" && claimStatusFilter) {
+    claimStatusFilter.value = includeExportedCsvRows?.checked ? "csv_done" : "csv_ready";
+    renderClaims();
+  }
   renderCsvPreflight();
 }
 
@@ -2935,6 +2945,14 @@ function renderCsvPreflight() {
       note: includeAlreadyExported
         ? "弥生へ二重取込しないか必ず確認してください"
         : "CSV出力履歴がある明細は除外します",
+    },
+    {
+      label: "一覧表示",
+      value: claimFilterLabel(claimStatusFilter?.value),
+      ok: csvFormat !== "yayoi_import" || ["csv_ready", "csv_done"].includes(claimStatusFilter?.value),
+      note: csvFormat === "yayoi_import"
+        ? "画面下部も弥生CSVの対象確認用に切り替えます"
+        : "表示フィルタで確認対象を切り替えられます",
     },
   ];
 
@@ -3143,6 +3161,25 @@ function csvScopeLabel(scope) {
     supplemental: "締め後追加精算のみ",
     all: "すべて",
   }[scope] || "";
+}
+
+function claimFilterLabel(filter) {
+  return {
+    all: "すべて",
+    ai_review: "AI要確認",
+    csv_unexported: "CSV未出力",
+    csv_exported: "CSV出力済み",
+    csv_ready: "弥生取込対象",
+    csv_done: "弥生出力済み",
+    regular_monthly: "通常精算",
+    supplemental_monthly: "締め後追加精算",
+    actionable: "自分の確認待ち",
+    manager_pending: "店長承認待ち",
+    accounting_pending: "経理確認待ち",
+    settlement_pending: "精算待ち",
+    returned: "差戻し",
+    settled: "精算済み",
+  }[filter] || filter || "";
 }
 
 function buildReviewCsv(rows) {
