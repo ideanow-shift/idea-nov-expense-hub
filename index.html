@@ -205,9 +205,11 @@
         </div>
         <div class="monthly-actions">
           <label>対象月<input id="monthlyFiscalMonth" type="month" /></label>
-          <button id="monthlyCreateButton" type="button">月次パック作成</button>
-          <button id="monthlyAttachDraftsButton" class="secondary" type="button">未提出明細を追加</button>
-          <button id="monthlySubmitButton" type="button">経理へ提出</button>
+          <div class="monthly-action-buttons">
+            <button id="monthlyCreateButton" type="button">月次パック作成</button>
+            <button id="monthlyAttachDraftsButton" class="secondary" type="button">未提出明細を追加</button>
+            <button id="monthlySubmitButton" type="button">経理へ提出</button>
+          </div>
         </div>
         <div id="monthlyReportSummary" class="monthly-summary"></div>
         <div id="monthlyReportList" class="monthly-list"></div>
@@ -235,57 +237,66 @@
         <h2>明細・申請一覧</h2>
         <div class="toolbar">
           <div class="toolbar-left">
-            <button id="exportCsvButton" type="button">会計CSV</button>
-            <label class="inline-filter">形式
-              <select id="csvFormatFilter">
-                <option value="review">確認用CSV</option>
-                <option value="yayoi_review">弥生確認CSV</option>
-                <option value="yayoi_import">弥生取込CSV</option>
-              </select>
-            </label>
-            <label class="inline-filter">CSV
-              <select id="csvStatusFilter">
-                <option value="settlement_pending">精算待ち</option>
-                <option value="settled">精算済み</option>
-                <option value="all">全件</option>
-              </select>
-            </label>
-            <label class="inline-filter">範囲
-              <select id="csvScopeFilter">
-                <option value="all">すべて</option>
-                <option value="regular">通常精算のみ</option>
-                <option value="supplemental">締め後追加精算のみ</option>
-              </select>
-            </label>
-            <label class="checkbox-filter">
-              <input id="includeExportedCsvRows" type="checkbox" />
-              CSV出力済みも含める
-            </label>
-            <label class="inline-filter">表示
-              <select id="claimStatusFilter">
-                <option value="all">すべて</option>
-                <option value="ai_review">AI要確認</option>
-                <option value="csv_unexported">CSV未出力</option>
-                <option value="csv_exported">CSV出力済み</option>
-                <option value="csv_ready">弥生取込対象</option>
-                <option value="csv_done">弥生出力済み</option>
-                <option value="cancellable">取消できる明細</option>
-                <option value="regular_monthly">通常精算</option>
-                <option value="supplemental_monthly">締め後追加精算</option>
-                <option value="actionable">自分の確認待ち</option>
-                <option value="manager_pending">店長承認待ち</option>
-                <option value="accounting_pending">経理確認待ち</option>
-                <option value="settlement_pending">精算待ち</option>
-                <option value="returned">差戻し</option>
-                <option value="settled">精算済み</option>
-                <option value="cancelled">取消済み</option>
-              </select>
-            </label>
-            <button id="selectVisibleClaimsButton" class="secondary" type="button">表示分を選択</button>
-            <button id="clearSelectedClaimsButton" class="secondary" type="button">選択解除</button>
-            <button id="bulkApproveButton" class="secondary" type="button">選択を承認</button>
-            <button id="bulkSettleButton" class="secondary" type="button">選択を精算済み</button>
-            <button id="bulkCancelButton" class="secondary danger" type="button">選択を取消</button>
+            <div class="toolbar-group toolbar-group-primary">
+              <span class="toolbar-group-title">CSV出力</span>
+              <button id="exportCsvButton" type="button">会計CSV</button>
+              <label class="inline-filter">形式
+                <select id="csvFormatFilter">
+                  <option value="review">確認用CSV</option>
+                  <option value="yayoi_review">弥生確認CSV</option>
+                  <option value="yayoi_import">弥生取込CSV</option>
+                </select>
+              </label>
+              <label class="inline-filter">CSV
+                <select id="csvStatusFilter">
+                  <option value="settlement_pending">精算待ち</option>
+                  <option value="settled">精算済み</option>
+                  <option value="all">全件</option>
+                </select>
+              </label>
+              <label class="inline-filter">範囲
+                <select id="csvScopeFilter">
+                  <option value="all">すべて</option>
+                  <option value="regular">通常精算のみ</option>
+                  <option value="supplemental">締め後追加精算のみ</option>
+                </select>
+              </label>
+              <label class="checkbox-filter">
+                <input id="includeExportedCsvRows" type="checkbox" />
+                CSV出力済みも含める
+              </label>
+            </div>
+            <div class="toolbar-group">
+              <span class="toolbar-group-title">表示</span>
+              <label class="inline-filter">表示
+                <select id="claimStatusFilter">
+                  <option value="all">すべて</option>
+                  <option value="ai_review">AI要確認</option>
+                  <option value="csv_unexported">CSV未出力</option>
+                  <option value="csv_exported">CSV出力済み</option>
+                  <option value="csv_ready">弥生取込対象</option>
+                  <option value="csv_done">弥生出力済み</option>
+                  <option value="cancellable">取消できる明細</option>
+                  <option value="regular_monthly">通常精算</option>
+                  <option value="supplemental_monthly">締め後追加精算</option>
+                  <option value="actionable">自分の確認待ち</option>
+                  <option value="manager_pending">店長承認待ち</option>
+                  <option value="accounting_pending">経理確認待ち</option>
+                  <option value="settlement_pending">精算待ち</option>
+                  <option value="returned">差戻し</option>
+                  <option value="settled">精算済み</option>
+                  <option value="cancelled">取消済み</option>
+                </select>
+              </label>
+            </div>
+            <div class="toolbar-group toolbar-group-actions">
+              <span class="toolbar-group-title">一括操作</span>
+              <button id="selectVisibleClaimsButton" class="secondary" type="button">表示分を選択</button>
+              <button id="clearSelectedClaimsButton" class="secondary" type="button">選択解除</button>
+              <button id="bulkApproveButton" class="secondary" type="button">選択を承認</button>
+              <button id="bulkSettleButton" class="secondary" type="button">選択を精算済み</button>
+              <button id="bulkCancelButton" class="secondary danger" type="button">選択を取消</button>
+            </div>
           </div>
           <span class="muted">承認・差戻し・精算・取消は権限と状態に応じて実行されます</span>
         </div>

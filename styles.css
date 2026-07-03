@@ -488,10 +488,21 @@ button:disabled {
 
 .monthly-actions {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) repeat(3, auto);
+  grid-template-columns: minmax(180px, 1fr) auto;
   gap: 12px;
   align-items: end;
   margin-bottom: 12px;
+}
+
+.monthly-action-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.monthly-action-buttons button {
+  min-height: 44px;
 }
 
 .export-history-panel {
@@ -1388,7 +1399,7 @@ textarea {
 }
 .toolbar {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
@@ -1396,10 +1407,45 @@ textarea {
 }
 
 .toolbar-left {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 12px;
+  width: 100%;
+}
+
+.toolbar-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px;
+  background: var(--soft);
+  display: flex;
+  align-items: end;
+  gap: 10px;
   flex-wrap: wrap;
+}
+
+.toolbar-group-primary {
+  background: #fff;
+}
+
+.toolbar-group-actions {
+  border-color: #ead7aa;
+  background: #fffaf0;
+}
+
+.toolbar-group-title {
+  flex-basis: 100%;
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.toolbar-group button {
+  min-height: 44px;
+}
+
+.toolbar-group select {
+  min-width: 180px;
 }
 
 .inline-filter {
@@ -1425,8 +1471,54 @@ textarea {
 }
 
 @media (max-width: 820px) {
+  .app-shell { padding: 10px; }
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .topbar-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+  .topbar-actions button {
+    flex: 1 1 0;
+  }
   .metrics, .role-insight, .accounting-ops-grid, .readiness-list, .csv-preflight-list, .executive-summary-grid, .executive-report-grid, .form-grid, .claim, .dashboard-grid, .auth-form, .monthly-close-box { grid-template-columns: 1fr; }
   .input-mode-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .monthly-actions { grid-template-columns: 1fr; }
+  .monthly-action-buttons {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .monthly-action-buttons button,
+  .toolbar-group button,
+  .toolbar-group .inline-filter,
+  .toolbar-group select,
+  .toolbar-group-primary > button {
+    width: 100%;
+  }
+  .toolbar {
+    display: grid;
+  }
+  .toolbar-left {
+    gap: 10px;
+  }
+  .toolbar-group {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+  .checkbox-filter {
+    align-items: center;
+    padding: 8px 0;
+    white-space: normal;
+  }
+  .export-history-item {
+    grid-template-columns: 1fr;
+  }
+  .export-history-meta {
+    text-align: left;
+  }
   .transport-bulk-controls,
   .transport-pasmo-import {
     grid-template-columns: 1fr;
@@ -1435,6 +1527,16 @@ textarea {
   .operation-guide { grid-template-columns: 1fr; }
   .inline-filter { grid-template-columns: 1fr; }
   .claim-select { align-self: auto; }
+}
+
+@media (max-width: 480px) {
+  .view-tabs button {
+    min-width: 112px;
+  }
+
+  .panel {
+    padding: 14px 12px;
+  }
 }
 
 /* Admin panels */
