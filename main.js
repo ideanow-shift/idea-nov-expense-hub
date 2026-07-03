@@ -511,16 +511,6 @@ async function loadCurrentEmployeeByAuthEmail() {
 function normalizeEmployee(employee) {
   if (!employee) return null;
   const roles = Array.isArray(employee.roles) ? [...employee.roles] : [];
-  for (const roleKey of hubContext?.roleKeys || []) {
-    const exists = roles.some((role) => (role.role_code || role.code) === roleKey);
-    if (!exists) {
-      roles.push({
-        role_code: roleKey,
-        role_name: roleKey,
-        source: "hub_context",
-      });
-    }
-  }
 
   return {
     ...employee,
