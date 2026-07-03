@@ -143,7 +143,6 @@ signOutButton.addEventListener("click", signOut);
 employeeForm.addEventListener("submit", saveEmployee);
 employeeNewButton.addEventListener("click", resetEmployeeForm);
 permissionForm.addEventListener("submit", assignPermission);
-permissionForm.elements.scopeType.addEventListener("change", updatePermissionScopeOptions);
 viewTabs?.addEventListener("click", handleViewTabClick);
 inputModeTabs?.addEventListener("click", handleInputModeTabClick);
 
@@ -1880,6 +1879,7 @@ async function loadPermissionAdmin() {
   permissionOptions = Array.isArray(data) ? data[0] : data;
   permissionPanel.hidden = false;
   renderPermissionFormOptions();
+  setPermissionFormReadOnly();
   renderPermissionList();
 }
 
@@ -1893,6 +1893,15 @@ function renderPermissionFormOptions() {
     `<option value="${escapeHtml(role.code)}">${escapeHtml(role.name)} (${escapeHtml(role.code)})</option>`
   ).join("");
   updatePermissionScopeOptions();
+}
+
+function setPermissionFormReadOnly() {
+  if (!permissionForm) return;
+  permissionForm.hidden = true;
+  permissionForm.setAttribute("aria-hidden", "true");
+  [...permissionForm.elements].forEach((element) => {
+    element.disabled = true;
+  });
 }
 
 function updatePermissionScopeOptions() {
@@ -1931,16 +1940,6 @@ function renderPermissionList() {
     </article>
   `).join("");
 
-  permissionList.querySelectorAll("button[data-remove-role]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      await removePermission({
-        employeeId: button.dataset.employeeId,
-        roleCode: button.dataset.roleCode,
-        scopeType: button.dataset.scopeType,
-        scopeId: button.dataset.scopeId || null,
-      });
-    });
-  });
 }
 
 function renderRoleChips(employee) {
@@ -1951,56 +1950,13 @@ function renderRoleChips(employee) {
     <span class="role-chip">
       ${escapeHtml(role.role_name || role.role_code)}
       <span class="muted">${escapeHtml(role.scope_name || role.scope_type || "")}</span>
-      <button class="secondary" type="button"
-        data-remove-role="1"
-        data-employee-id="${escapeHtml(employee.id)}"
-        data-role-code="${escapeHtml(role.role_code)}"
-        data-scope-type="${escapeHtml(role.scope_type)}"
-        data-scope-id="${escapeHtml(role.scope_id || "")}">削除</button>
     </span>
   `).join("");
 }
 
 async function assignPermission(event) {
   event.preventDefault();
-  const fd = new FormData(permissionForm);
-  const scopeType = String(fd.get("scopeType") || "global");
-  const scopeId = scopeType === "global" ? null : String(fd.get("scopeId") || "");
-  const { error } = await supabase
-    .schema("core")
-    .rpc("assign_employee_role", {
-      p_employee_id: fd.get("employeeId"),
-      p_role_code: fd.get("roleCode"),
-      p_scope_type: scopeType,
-      p_scope_id: scopeId || null,
-    });
-
-  if (error) {
-    alert(error.message);
-    return;
-  }
-
-  await loadPermissionAdmin();
-}
-
-async function removePermission({ employeeId, roleCode, scopeType, scopeId }) {
-  if (!confirm("この権限を削除しますか？")) return;
-
-  const { error } = await supabase
-    .schema("core")
-    .rpc("remove_employee_role", {
-      p_employee_id: employeeId,
-      p_role_code: roleCode,
-      p_scope_type: scopeType,
-      p_scope_id: scopeId || null,
-    });
-
-  if (error) {
-    alert(error.message);
-    return;
-  }
-
-  await loadPermissionAdmin();
+  alert("権限変更はNOV HUB側で管理します。経費精算管理システムでは更新しません。");
 }
 
 async function handleReceiptSelected() {

@@ -344,8 +344,9 @@
       </section>
 
       <section id="permissionPanel" class="panel" hidden>
-        <h2>権限管理</h2>
-        <form id="permissionForm" class="permission-form">
+        <h2>権限参照</h2>
+        <p class="muted">権限変更はNOV HUB側で管理します。経費精算管理システムでは現在の権限を参照します。</p>
+        <form id="permissionForm" class="permission-form" hidden aria-hidden="true">
           <label>社員<select name="employeeId" required></select></label>
           <label>権限<select name="roleCode" required></select></label>
           <label>範囲<select name="scopeType" required>
@@ -354,7 +355,7 @@
             <option value="corporation">法人</option>
           </select></label>
           <label>対象<select name="scopeId"></select></label>
-          <button type="submit">付与</button>
+          <button type="submit" disabled>HUB側で管理</button>
         </form>
         <div id="permissionList" class="permission-list"></div>
       </section>
