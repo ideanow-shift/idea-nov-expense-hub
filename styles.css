@@ -505,6 +505,27 @@ button:disabled {
   min-height: 44px;
 }
 
+.workflow-guide {
+  display: grid;
+  grid-template-columns: auto repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-items: center;
+  border: 1px solid #d8c8a4;
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin: 12px 0;
+  background: #fffaf0;
+  font-size: 13px;
+}
+
+.workflow-guide strong {
+  white-space: nowrap;
+}
+
+.workflow-guide span {
+  color: var(--sub);
+}
+
 .export-history-panel {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1524,7 +1545,8 @@ textarea {
     grid-template-columns: 1fr;
   }
   .claim-actions { justify-content: flex-start; }
-  .operation-guide { grid-template-columns: 1fr; }
+  .operation-guide,
+  .workflow-guide { grid-template-columns: 1fr; }
   .inline-filter { grid-template-columns: 1fr; }
   .claim-select { align-self: auto; }
 }
