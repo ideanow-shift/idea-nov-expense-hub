@@ -1237,6 +1237,17 @@ textarea {
   flex-wrap: wrap;
 }
 
+.monthly-close-confirm-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  line-height: 1.6;
+}
+
+.monthly-close-confirm-check input {
+  margin-top: 0.35rem;
+}
+
 .muted {
   color: var(--sub);
   font-size: 12px;

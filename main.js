@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SUPABASE_URL = window.NOV_SUPABASE_URL || "";
 const SUPABASE_ANON_KEY = window.NOV_SUPABASE_ANON_KEY || "";
 const PASMO_IMPORT_AUDIT_ENABLED = false;
+const MONTHLY_CLOSE_EDGE_WRAPPER_ENABLED = false;
 let supabase = null;
 
 const claimList = document.querySelector("#claimList");
@@ -1030,29 +1031,110 @@ async function loadMonthlyCloseStatus() {
     <span>${Number(data.total_claim_count || 0)}件 / ${Number(data.total_amount || 0).toLocaleString("ja-JP")}円 / 精算済み ${Number(data.settled_count || 0)}件</span>
     <span>${blockers.length ? `未処理: ${escapeHtml(blockers.join(" / "))}` : "未処理はありません。締め可能です。"}</span>
   `;
+  if (!MONTHLY_CLOSE_EDGE_WRAPPER_ENABLED) {
+    monthlyCloseButton.disabled = true;
+    monthlyCloseButton.title = "月次締めはEdge経由への切替確認中です";
+    return;
+  }
+  monthlyCloseButton.title = "";
   monthlyCloseButton.disabled = !data.can_close;
 }
 
 async function closeSelectedMonthlyPeriod() {
   const fiscalMonth = selectedCloseFiscalMonthDate();
   if (!fiscalMonth) return;
-  if (!confirm(`${formatMonth(fiscalMonth)} を月次締めしますか？\n締め後は経理上、この月の処理完了として扱います。`)) return;
+
+  if (!MONTHLY_CLOSE_EDGE_WRAPPER_ENABLED) {
+    alert("月次締めは現在安全確認中です。Edge経由への切替が承認されるまで実行できません。");
+    monthlyCloseButton.disabled = true;
+    return;
+  }
+
+  const confirmed = await confirmMonthlyClose(fiscalMonth);
+  if (!confirmed) return;
 
   monthlyCloseButton.disabled = true;
-  const { error } = await supabase
-    .schema("finance")
-    .rpc("close_monthly_expense_period", {
-      p_fiscal_month: fiscalMonth,
-      p_note: "月次締め",
-    });
-
-  if (error) {
-    alert(error.message);
+  try {
+    await closeMonthlyPeriodViaEdge(fiscalMonth, "regular_monthly_close");
+  } catch (error) {
+    alert(error?.message || "月次締めに失敗しました。");
     await loadMonthlyCloseStatus();
     return;
   }
 
   await refreshAll();
+}
+
+async function closeMonthlyPeriodViaEdge(fiscalMonth, reasonCode) {
+  const { data } = await supabase.auth.getSession();
+  const token = data?.session?.access_token;
+  if (!token) throw new Error("認証情報を確認できませんでした。再ログインしてください。");
+
+  const response = await fetch(`${SUPABASE_URL}/functions/v1/expense-close-monthly-period`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      fiscalMonth,
+      reasonCode,
+      clientConfirmation: true,
+    }),
+  });
+
+  let result = {};
+  try {
+    result = await response.json();
+  } catch {
+    result = {};
+  }
+
+  if (!response.ok || result.ok !== true) {
+    throw new Error(result.error || "月次締めに失敗しました。");
+  }
+
+  return result;
+}
+
+function confirmMonthlyClose(fiscalMonth) {
+  return new Promise((resolve) => {
+    const dialog = document.createElement("dialog");
+    dialog.className = "comment-dialog monthly-close-confirm-dialog";
+    dialog.innerHTML = `
+      <form method="dialog">
+        <h3>${escapeHtml(formatMonth(fiscalMonth))} を月次締めします</h3>
+        <p class="muted">月次締めは強い会計操作です。取り消しにはレビューが必要です。</p>
+        <label class="monthly-close-confirm-check">
+          <input type="checkbox" value="confirmed">
+          <span>対象月と未処理件数を確認しました</span>
+        </label>
+        <div class="dialog-actions">
+          <button type="button" data-close-monthly-cancel>キャンセル</button>
+          <button type="submit" data-close-monthly-submit disabled>月次締め</button>
+        </div>
+      </form>
+    `;
+
+    const checkbox = dialog.querySelector("input[type='checkbox']");
+    const submitButton = dialog.querySelector("[data-close-monthly-submit]");
+    const cancelButton = dialog.querySelector("[data-close-monthly-cancel]");
+
+    checkbox?.addEventListener("change", () => {
+      submitButton.disabled = !checkbox.checked;
+    });
+    cancelButton?.addEventListener("click", () => {
+      dialog.close("cancel");
+    });
+    dialog.addEventListener("close", () => {
+      const confirmed = dialog.returnValue !== "cancel" && checkbox?.checked === true;
+      dialog.remove();
+      resolve(confirmed);
+    });
+
+    document.body.appendChild(dialog);
+    dialog.showModal();
+  });
 }
 
 function canActOnMonthlyReport(report, action) {
