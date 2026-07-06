@@ -1054,6 +1054,18 @@ textarea {
   margin: 10px 0;
 }
 
+.pasmo-hold-notice {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #f0b56a;
+  border-radius: var(--radius);
+  background: #fff7e8;
+  color: #7a4a00;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 .transport-bulk-panel textarea {
   width: 100%;
   min-height: 120px;

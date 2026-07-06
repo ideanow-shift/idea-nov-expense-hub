@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL = window.NOV_SUPABASE_URL || "";
 const SUPABASE_ANON_KEY = window.NOV_SUPABASE_ANON_KEY || "";
+const PASMO_IMPORT_AUDIT_ENABLED = false;
 let supabase = null;
 
 const claimList = document.querySelector("#claimList");
@@ -660,14 +661,26 @@ function setInputMode(mode) {
       manual: "少額の通常経費を1件ずつ登録します。",
       receipt: "レシート画像やPDFを読み込み、AI解析結果をフォームへ反映します。",
       transport: "交通費を複数行まとめて貼り付け、必要な行だけ下書き保存します。",
-      pasmo: "PASMO明細PDFから交通費候補を抽出し、物販やチャージは除外候補にします。",
+      pasmo: "PASMO明細PDF取込は監査保存接続確認中のため一時停止中です。",
     }[activeInputMode];
   }
 
   if (isPasmoMode) {
-    transportBulkStatus.textContent = "PASMO PDFを選択して取込してください。交通費候補だけを選んで下書き保存できます。";
+    transportBulkStatus.textContent = "PASMO PDF取込は現在利用できません。交通費は「交通費まとめ入力」タブから登録してください。";
   } else if (isTransportMode) {
     transportBulkStatus.textContent = "交通費をまとめて入力できます。";
+  }
+
+  if (pasmoPdfFile) pasmoPdfFile.disabled = isPasmoMode && !PASMO_IMPORT_AUDIT_ENABLED;
+  if (analyzePasmoPdfButton) {
+    analyzePasmoPdfButton.disabled = isPasmoMode && !PASMO_IMPORT_AUDIT_ENABLED;
+    analyzePasmoPdfButton.textContent = isPasmoMode && !PASMO_IMPORT_AUDIT_ENABLED ? "接続確認中" : "PASMO PDF取込";
+  }
+  if (saveTransportBulkButton) {
+    saveTransportBulkButton.disabled = isPasmoMode && !PASMO_IMPORT_AUDIT_ENABLED;
+  }
+  if (isPasmoMode && pasmoPdfStatus && !PASMO_IMPORT_AUDIT_ENABLED) {
+    pasmoPdfStatus.textContent = "監査保存接続確認中";
   }
 }
 
@@ -2409,6 +2422,13 @@ function handlePasmoPdfSelected() {
 }
 
 async function analyzePasmoPdf() {
+  if (!PASMO_IMPORT_AUDIT_ENABLED) {
+    const message = "PASMO PDF取込は監査保存接続確認中のため一時停止中です。交通費は「交通費まとめ入力」タブから登録してください。";
+    if (pasmoPdfStatus) pasmoPdfStatus.textContent = "監査保存接続確認中";
+    if (transportBulkStatus) transportBulkStatus.textContent = message;
+    alert(message);
+    return;
+  }
   const file = pasmoPdfFile?.files?.[0];
   if (!file) {
     alert("PASMO明細PDFを選択してください。");
