@@ -41,16 +41,6 @@
       </nav>
 
       <section data-view-section="dashboard" class="view-section">
-      <section class="panel dashboard-control-panel">
-        <div class="section-header">
-          <h2>Dashboard</h2>
-          <span class="muted">対象月をそろえて月次状況を確認します</span>
-        </div>
-        <label class="dashboard-month-filter">対象月
-          <input id="dashboardFiscalMonth" type="month" />
-        </label>
-      </section>
-
       <section class="metrics">
         <article><span>申請</span><strong id="metricAll">0</strong></article>
         <article><span>承認待ち</span><strong id="metricPending">0</strong></article>
@@ -87,14 +77,6 @@
         <div id="accountingOps" class="accounting-ops-grid"></div>
       </section>
 
-      <section class="panel production-readiness-panel">
-        <div class="section-header">
-          <h2>本番準備チェック</h2>
-          <span class="muted">月次締め・CSV・未添付・未処理を確認します</span>
-        </div>
-        <div id="productionReadiness" class="readiness-list"></div>
-      </section>
-
       <section class="panel executive-report-panel">
         <div class="section-header">
           <h2>月次幹部レポート</h2>
@@ -107,32 +89,23 @@
 
       <section data-view-section="input" class="view-section panel claim-entry-panel">
         <h2>経費明細登録</h2>
-        <div class="input-mode-tabs" id="inputModeTabs">
-          <button type="button" data-input-mode="manual" class="active">手入力</button>
-          <button type="button" data-input-mode="receipt">レシートAI</button>
-          <button type="button" data-input-mode="transport">交通費まとめ入力</button>
-          <button type="button" data-input-mode="pasmo">PASMO PDF</button>
-        </div>
-        <div id="inputModeGuide" class="input-mode-guide">少額の通常経費を1件ずつ登録します。</div>
         <form id="claimForm" class="form-grid claim-form-compact">
           <div class="wide claim-assist">
             <button id="applyLastClaimButton" class="secondary" type="button">前回入力を使う</button>
             <span id="lastClaimHint" class="muted">前回の用途・支払方法・勘定科目候補を再利用できます</span>
           </div>
-          <label class="receipt-file-field receipt-mode-only">レシート
-            <input id="receiptFile" name="receiptFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" multiple />
+          <label class="receipt-file-field">レシート
+            <input id="receiptFile" name="receiptFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" />
           </label>
-          <div class="receipt-actions receipt-mode-only">
+          <div class="receipt-actions">
             <button id="analyzeReceiptButton" type="button">レシートAI解析</button>
             <span id="receiptStatus" class="muted">レシート未選択</span>
           </div>
-          <div id="receiptBatchList" class="receipt-batch-list wide receipt-mode-only" hidden></div>
-          <details class="ocr-details receipt-mode-only">
+          <details class="ocr-details">
             <summary>OCR補助</summary>
             <textarea id="ocrText" name="ocrText" rows="3" placeholder="画像OCRが不安な場合だけ、レシート文字を貼り付け"></textarea>
           </details>
           <label>日付<input name="expenseDate" type="date" required /></label>
-          <div id="expenseDateMonthHint" class="field-suggestion month-close-hint" hidden></div>
           <label>金額<input name="amount" type="number" min="1" required /></label>
           <label>消費税<input name="tax" type="number" min="0" value="0" /></label>
           <label>店名<input name="vendor" type="text" /></label>
@@ -163,39 +136,6 @@
           <div id="claimPrecheck" class="precheck wide" hidden></div>
           <button class="save-claim-button" type="submit">明細保存</button>
         </form>
-
-        <section class="transport-bulk-panel" hidden>
-          <div class="section-header">
-            <h3>交通費一括入力</h3>
-            <span class="muted">日付・区間・金額をまとめて明細化します</span>
-          </div>
-          <div class="transport-bulk-controls">
-            <label>支払方法
-              <select id="transportPaymentMethod">
-                <option value="立替">立替</option>
-                <option value="交通系IC">交通系IC</option>
-                <option value="現金">現金</option>
-                <option value="カード">カード</option>
-              </select>
-            </label>
-            <button id="parseTransportBulkButton" class="transport-manual-only" type="button">交通費を読み込み</button>
-            <button id="selectAllTransportButton" class="secondary" type="button">すべて選択</button>
-            <button id="saveTransportBulkButton" type="button">選択を下書き保存</button>
-          </div>
-          <div class="transport-pasmo-import">
-            <label>PASMO明細PDF
-              <input id="pasmoPdfFile" type="file" accept="application/pdf" />
-            </label>
-            <button id="analyzePasmoPdfButton" class="secondary" type="button">PASMO PDF取込</button>
-            <span id="pasmoPdfStatus" class="muted">PDF未選択</span>
-          </div>
-          <textarea id="transportBulkText" class="transport-manual-only" rows="5" placeholder="例:
-2026/07/01 所沢 - 池袋 片道 450
-2026/07/01 池袋 - 新宿 往復 360
-2026/07/02 所沢,立川,打合せ,620"></textarea>
-          <div id="transportBulkStatus" class="muted">交通費をまとめて入力できます。</div>
-          <div id="transportBulkList" class="transport-bulk-list" hidden></div>
-        </section>
       </section>
 
       <section data-view-section="monthly" class="view-section panel monthly-panel">
@@ -205,11 +145,9 @@
         </div>
         <div class="monthly-actions">
           <label>対象月<input id="monthlyFiscalMonth" type="month" /></label>
-          <div class="monthly-action-buttons">
-            <button id="monthlyCreateButton" type="button">月次パック作成</button>
-            <button id="monthlyAttachDraftsButton" class="secondary" type="button">未提出明細を追加</button>
-            <button id="monthlySubmitButton" type="button">経理へ提出</button>
-          </div>
+          <button id="monthlyCreateButton" type="button">月次パック作成</button>
+          <button id="monthlyAttachDraftsButton" class="secondary" type="button">未提出明細を追加</button>
+          <button id="monthlySubmitButton" type="button">経理へ提出</button>
         </div>
         <div id="monthlyReportSummary" class="monthly-summary"></div>
         <div id="monthlyReportList" class="monthly-list"></div>
@@ -237,90 +175,50 @@
         <h2>明細・申請一覧</h2>
         <div class="toolbar">
           <div class="toolbar-left">
-            <div class="toolbar-group toolbar-group-primary">
-              <span class="toolbar-group-title">CSV出力</span>
-              <button id="exportCsvButton" type="button">会計CSV</button>
-              <label class="inline-filter">形式
-                <select id="csvFormatFilter">
-                  <option value="review">確認用CSV</option>
-                  <option value="yayoi_review">弥生確認CSV</option>
-                  <option value="yayoi_import">弥生取込CSV</option>
-                </select>
-              </label>
-              <label class="inline-filter">CSV
-                <select id="csvStatusFilter">
-                  <option value="settlement_pending">精算待ち</option>
-                  <option value="settled">精算済み</option>
-                  <option value="all">全件</option>
-                </select>
-              </label>
-              <label class="inline-filter">範囲
-                <select id="csvScopeFilter">
-                  <option value="all">すべて</option>
-                  <option value="regular">通常精算のみ</option>
-                  <option value="supplemental">締め後追加精算のみ</option>
-                </select>
-              </label>
-              <label class="checkbox-filter">
-                <input id="includeExportedCsvRows" type="checkbox" />
-                CSV出力済みも含める
-              </label>
-            </div>
-            <div class="toolbar-group">
-              <span class="toolbar-group-title">表示</span>
-              <label class="inline-filter">表示
-                <select id="claimStatusFilter">
-                  <option value="all">すべて</option>
-                  <option value="ai_review">AI要確認</option>
-                  <option value="csv_unexported">CSV未出力</option>
-                  <option value="csv_exported">CSV出力済み</option>
-                  <option value="csv_ready">弥生取込対象</option>
-                  <option value="csv_done">弥生出力済み</option>
-                  <option value="cancellable">取消できる明細</option>
-                  <option value="regular_monthly">通常精算</option>
-                  <option value="supplemental_monthly">締め後追加精算</option>
-                  <option value="actionable">自分の確認待ち</option>
-                  <option value="manager_pending">店長承認待ち</option>
-                  <option value="accounting_pending">経理確認待ち</option>
-                  <option value="settlement_pending">精算待ち</option>
-                  <option value="returned">差戻し</option>
-                  <option value="settled">精算済み</option>
-                  <option value="cancelled">取消済み</option>
-                </select>
-              </label>
-            </div>
-            <div class="toolbar-group toolbar-group-actions">
-              <span class="toolbar-group-title">一括操作</span>
-              <button id="selectVisibleClaimsButton" class="secondary" type="button">表示分を選択</button>
-              <button id="clearSelectedClaimsButton" class="secondary" type="button">選択解除</button>
-              <button id="bulkApproveButton" class="secondary" type="button">選択を承認</button>
-              <button id="bulkSettleButton" class="secondary" type="button">選択を精算済み</button>
-              <button id="bulkCancelButton" class="secondary danger" type="button">選択を取消</button>
-            </div>
+            <button id="exportCsvButton" type="button">会計CSV</button>
+            <label class="inline-filter">形式
+              <select id="csvFormatFilter">
+                <option value="review">確認用CSV</option>
+                <option value="yayoi_review">弥生確認CSV</option>
+                <option value="yayoi_import">弥生取込CSV</option>
+              </select>
+            </label>
+            <label class="inline-filter">CSV
+              <select id="csvStatusFilter">
+                <option value="settlement_pending">精算待ち</option>
+                <option value="settled">精算済み</option>
+                <option value="all">全件</option>
+              </select>
+            </label>
+            <label class="inline-filter">表示
+              <select id="claimStatusFilter">
+                <option value="all">すべて</option>
+                <option value="ai_review">AI要確認</option>
+                <option value="csv_unexported">CSV未出力</option>
+                <option value="csv_exported">CSV出力済み</option>
+                <option value="actionable">自分の確認待ち</option>
+                <option value="manager_pending">店長承認待ち</option>
+                <option value="accounting_pending">経理確認待ち</option>
+                <option value="settlement_pending">精算待ち</option>
+                <option value="returned">差戻し</option>
+                <option value="settled">精算済み</option>
+              </select>
+            </label>
+            <button id="bulkApproveButton" class="secondary" type="button">選択を承認</button>
+            <button id="bulkSettleButton" class="secondary" type="button">選択を精算済み</button>
           </div>
-          <span class="muted">承認・差戻し・精算・取消は権限と状態に応じて実行されます</span>
-        </div>
-        <div class="operation-guide">
-          <strong>操作の目安</strong>
-          <span>間違って登録した明細は「取消」で集計・CSV対象から外します。</span>
-          <span>精算済み・CSV出力済みは会計証跡保護のため取消できません。</span>
-          <span>迷ったら表示を「取消できる明細」に切り替えてください。</span>
+          <span class="muted">承認・差戻し・精算は権限に応じて実行されます</span>
         </div>
         <div class="export-history-panel">
           <h3>CSV出力履歴</h3>
           <div id="accountingExportHistory" class="export-history-list"></div>
-        </div>
-        <div class="csv-preflight-panel">
-          <h3>弥生CSV出力前チェック</h3>
-          <div id="csvPreflight" class="csv-preflight-list"></div>
         </div>
         <div id="claimList" class="claim-list"></div>
       </section>
 
       <section data-view-section="admin" class="view-section admin-view">
       <section id="employeePanel" class="panel" hidden>
-        <h2>社員参照</h2>
-        <p class="muted">社員属性はCore DB / NOV HUB側を正本にします。経費精算管理システムでは参照のみ行います。</p>
+        <h2>社員管理</h2>
         <form id="employeeForm" class="employee-form">
           <input name="employeeId" type="hidden" />
           <label>社員コード<input name="employeeCode" type="text" placeholder="例: NOV-0001" /></label>
@@ -336,8 +234,8 @@
             <option value="inactive">退職・停止</option>
           </select></label>
           <div class="form-actions wide">
-            <button type="submit" disabled>Core DB参照のみ</button>
-            <button id="employeeNewButton" class="secondary" type="button">表示クリア</button>
+            <button type="submit">保存</button>
+            <button id="employeeNewButton" class="secondary" type="button">新規入力</button>
           </div>
         </form>
         <div id="employeeList" class="employee-list"></div>

@@ -9,35 +9,17 @@ const claimForm = document.querySelector("#claimForm");
 const receiptInput = document.querySelector("#receiptFile");
 const receiptStatus = document.querySelector("#receiptStatus");
 const analyzeReceiptButton = document.querySelector("#analyzeReceiptButton");
-const receiptBatchList = document.querySelector("#receiptBatchList");
-const transportBulkText = document.querySelector("#transportBulkText");
-const transportPaymentMethod = document.querySelector("#transportPaymentMethod");
-const parseTransportBulkButton = document.querySelector("#parseTransportBulkButton");
-const selectAllTransportButton = document.querySelector("#selectAllTransportButton");
-const saveTransportBulkButton = document.querySelector("#saveTransportBulkButton");
-const transportBulkStatus = document.querySelector("#transportBulkStatus");
-const transportBulkList = document.querySelector("#transportBulkList");
-const pasmoPdfFile = document.querySelector("#pasmoPdfFile");
-const analyzePasmoPdfButton = document.querySelector("#analyzePasmoPdfButton");
-const pasmoPdfStatus = document.querySelector("#pasmoPdfStatus");
 const exportCsvButton = document.querySelector("#exportCsvButton");
 const csvFormatFilter = document.querySelector("#csvFormatFilter");
 const csvStatusFilter = document.querySelector("#csvStatusFilter");
-const csvScopeFilter = document.querySelector("#csvScopeFilter");
-const includeExportedCsvRows = document.querySelector("#includeExportedCsvRows");
 const accountingExportHistory = document.querySelector("#accountingExportHistory");
-const csvPreflight = document.querySelector("#csvPreflight");
 const claimStatusFilter = document.querySelector("#claimStatusFilter");
 const bulkApproveButton = document.querySelector("#bulkApproveButton");
 const bulkSettleButton = document.querySelector("#bulkSettleButton");
-const bulkCancelButton = document.querySelector("#bulkCancelButton");
-const selectVisibleClaimsButton = document.querySelector("#selectVisibleClaimsButton");
-const clearSelectedClaimsButton = document.querySelector("#clearSelectedClaimsButton");
 const profileLabel = document.querySelector("#profileLabel");
 const storeRank = document.querySelector("#storeRank");
 const departmentRank = document.querySelector("#departmentRank");
 const accountingOps = document.querySelector("#accountingOps");
-const productionReadiness = document.querySelector("#productionReadiness");
 const executiveMonthlyReport = document.querySelector("#executiveMonthlyReport");
 const monthlyAiComment = document.querySelector("#monthlyAiComment");
 const roleInsight = document.querySelector("#roleInsight");
@@ -58,7 +40,6 @@ const claimPrecheck = document.querySelector("#claimPrecheck");
 const applyLastClaimButton = document.querySelector("#applyLastClaimButton");
 const lastClaimHint = document.querySelector("#lastClaimHint");
 const vendorSuggestion = document.querySelector("#vendorSuggestion");
-const expenseDateMonthHint = document.querySelector("#expenseDateMonthHint");
 const highAmountReasonField = document.querySelector("#highAmountReasonField");
 const workflowCommentDialog = document.querySelector("#workflowCommentDialog");
 const workflowCommentForm = document.querySelector("#workflowCommentForm");
@@ -77,16 +58,9 @@ const monthlyAccountingList = document.querySelector("#monthlyAccountingList");
 const monthlyCloseStatus = document.querySelector("#monthlyCloseStatus");
 const monthlyCloseButton = document.querySelector("#monthlyCloseButton");
 const monthlyCloseFiscalMonth = document.querySelector("#monthlyCloseFiscalMonth");
-const dashboardFiscalMonth = document.querySelector("#dashboardFiscalMonth");
 const viewTabs = document.querySelector("#viewTabs");
-const inputModeTabs = document.querySelector("#inputModeTabs");
-const inputModeGuide = document.querySelector("#inputModeGuide");
-const transportBulkPanel = document.querySelector(".transport-bulk-panel");
 
 let uploadedReceiptPath = "";
-let uploadedReceiptMeta = null;
-let batchReceiptItems = [];
-let transportBulkCandidates = [];
 let currentEmployee = null;
 let employeeOptions = null;
 let permissionOptions = null;
@@ -100,9 +74,6 @@ let pendingClaimId = "";
 let notificationsCache = [];
 let auditLogCache = new Map();
 let exportedClaimCache = new Map();
-let pasmoAuditCache = new Map();
-let closeStatusCache = new Map();
-let activeInputMode = "manual";
 
 document.querySelector("#refreshButton").addEventListener("click", refreshAll);
 claimForm.addEventListener("submit", submitClaim);
@@ -111,40 +82,24 @@ claimForm.addEventListener("click", handleClaimFormClick);
 applyLastClaimButton.addEventListener("click", applyLastClaimDefaults);
 receiptInput.addEventListener("change", handleReceiptSelected);
 analyzeReceiptButton.addEventListener("click", analyzeReceipt);
-receiptBatchList?.addEventListener("click", handleReceiptBatchClick);
-parseTransportBulkButton?.addEventListener("click", parseTransportBulkInput);
-selectAllTransportButton?.addEventListener("click", selectAllTransportCandidates);
-saveTransportBulkButton?.addEventListener("click", saveSelectedTransportCandidates);
-transportBulkList?.addEventListener("change", handleTransportCandidateChange);
-pasmoPdfFile?.addEventListener("change", handlePasmoPdfSelected);
-analyzePasmoPdfButton?.addEventListener("click", analyzePasmoPdf);
 exportCsvButton.addEventListener("click", exportAccountingCsv);
-csvFormatFilter?.addEventListener("change", handleCsvFilterChange);
-csvStatusFilter?.addEventListener("change", handleCsvFilterChange);
-csvScopeFilter?.addEventListener("change", handleCsvFilterChange);
-includeExportedCsvRows?.addEventListener("change", handleCsvFilterChange);
 claimStatusFilter.addEventListener("change", renderClaims);
 bulkApproveButton.addEventListener("click", () => runBulkWorkflowAction("approve"));
 bulkSettleButton.addEventListener("click", () => runBulkWorkflowAction("settle"));
-bulkCancelButton?.addEventListener("click", () => runBulkWorkflowAction("cancel"));
-selectVisibleClaimsButton?.addEventListener("click", selectVisibleClaims);
-clearSelectedClaimsButton?.addEventListener("click", clearSelectedClaims);
 markNotificationsReadButton.addEventListener("click", markNotificationsRead);
 monthlyRefreshButton.addEventListener("click", loadMonthlyReports);
-monthlyFiscalMonth?.addEventListener("change", handleMonthlyFiscalMonthChange);
 monthlyCreateButton.addEventListener("click", createCurrentMonthlyReport);
 monthlyAttachDraftsButton.addEventListener("click", attachDraftClaimsToCurrentReport);
 monthlySubmitButton.addEventListener("click", submitCurrentMonthlyReport);
 monthlyCloseButton?.addEventListener("click", closeSelectedMonthlyPeriod);
 monthlyCloseFiscalMonth?.addEventListener("change", loadMonthlyCloseStatus);
-dashboardFiscalMonth?.addEventListener("change", handleDashboardMonthChange);
 authForm.addEventListener("submit", signIn);
 signOutButton.addEventListener("click", signOut);
 employeeForm.addEventListener("submit", saveEmployee);
 employeeNewButton.addEventListener("click", resetEmployeeForm);
 permissionForm.addEventListener("submit", assignPermission);
+permissionForm.elements.scopeType.addEventListener("change", updatePermissionScopeOptions);
 viewTabs?.addEventListener("click", handleViewTabClick);
-inputModeTabs?.addEventListener("click", handleInputModeTabClick);
 
 await initialize();
 
@@ -511,6 +466,16 @@ async function loadCurrentEmployeeByAuthEmail() {
 function normalizeEmployee(employee) {
   if (!employee) return null;
   const roles = Array.isArray(employee.roles) ? [...employee.roles] : [];
+  for (const roleKey of hubContext?.roleKeys || []) {
+    const exists = roles.some((role) => (role.role_code || role.code) === roleKey);
+    if (!exists) {
+      roles.push({
+        role_code: roleKey,
+        role_name: roleKey,
+        source: "hub_context",
+      });
+    }
+  }
 
   return {
     ...employee,
@@ -540,38 +505,12 @@ function renderProfile(employee) {
 }
 
 function hasRole(employee, roleCode) {
-  return Boolean((employee?.roles || []).some((role) => roleCodeAliases(roleCode).includes(role.role_code || role.code)));
-}
-
-function hasAnyRole(employee, roleCodes) {
-  return roleCodes.some((roleCode) => hasRole(employee, roleCode));
-}
-
-function roleCodeAliases(roleCode) {
-  const aliases = {
-    admin: ["admin", "super_admin"],
-    manager: ["manager", "store_manager", "area_manager", "department_manager"],
-    accounting: ["accounting", "super_admin"],
-    executive: ["executive", "super_admin"],
-    backoffice: ["backoffice", "super_admin"],
-  };
-  return aliases[roleCode] || [roleCode];
-}
-
-function canUseAccountingFeatures(employee = currentEmployee) {
-  return hasAnyRole(employee, ["accounting", "executive", "backoffice"]);
-}
-
-function canUseExecutiveFeatures(employee = currentEmployee) {
-  return hasRole(employee, "executive");
-}
-
-function canUseAdminFeatures(employee = currentEmployee) {
-  return hasAnyRole(employee, ["executive", "admin"]);
+  return Boolean((employee?.roles || []).some((role) => (role.role_code || role.code) === roleCode));
 }
 
 function defaultViewForEmployee(employee) {
-  if (canUseAccountingFeatures(employee)) return "accounting";
+  if (hasRole(employee, "accounting")) return "accounting";
+  if (hasRole(employee, "executive")) return "dashboard";
   if (hasRole(employee, "manager")) return "dashboard";
   return "input";
 }
@@ -592,12 +531,6 @@ function handleViewTabClick(event) {
   setActiveView(button.dataset.viewTab);
 }
 
-function handleInputModeTabClick(event) {
-  const button = event.target.closest("button[data-input-mode]");
-  if (!button) return;
-  setInputMode(button.dataset.inputMode);
-}
-
 function setActiveView(view) {
   if (!canAccessView(view)) return;
   activeView = view;
@@ -606,9 +539,9 @@ function setActiveView(view) {
 
 function canAccessView(view) {
   if (!currentEmployee) return false;
-  if (view === "accounting") return canUseAccountingFeatures();
-  if (view === "admin") return canUseAdminFeatures();
-  if (view === "reports") return canUseAccountingFeatures();
+  if (view === "accounting") return hasRole(currentEmployee, "accounting") || hasRole(currentEmployee, "executive");
+  if (view === "admin") return hasRole(currentEmployee, "executive");
+  if (view === "reports") return hasRole(currentEmployee, "accounting") || hasRole(currentEmployee, "executive");
   return true;
 }
 
@@ -627,48 +560,6 @@ function updateViewVisibility() {
     button.disabled = !allowed;
     button.classList.toggle("is-active", view === activeView && allowed);
   });
-
-  if (activeView === "input") setInputMode(activeInputMode);
-}
-
-function setInputMode(mode) {
-  activeInputMode = ["manual", "receipt", "transport", "pasmo"].includes(mode) ? mode : "manual";
-  const isFormMode = activeInputMode === "manual" || activeInputMode === "receipt";
-  const isReceiptMode = activeInputMode === "receipt";
-  const isTransportMode = activeInputMode === "transport";
-  const isPasmoMode = activeInputMode === "pasmo";
-
-  if (claimForm) claimForm.hidden = !isFormMode;
-  if (transportBulkPanel) transportBulkPanel.hidden = !(isTransportMode || isPasmoMode);
-
-  document.querySelectorAll(".receipt-mode-only").forEach((element) => {
-    element.hidden = !isReceiptMode;
-  });
-  document.querySelectorAll(".transport-manual-only").forEach((element) => {
-    element.hidden = !isTransportMode;
-  });
-  document.querySelectorAll(".transport-pasmo-import").forEach((element) => {
-    element.hidden = !isPasmoMode;
-  });
-
-  inputModeTabs?.querySelectorAll("button[data-input-mode]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.inputMode === activeInputMode);
-  });
-
-  if (inputModeGuide) {
-    inputModeGuide.textContent = {
-      manual: "少額の通常経費を1件ずつ登録します。",
-      receipt: "レシート画像やPDFを読み込み、AI解析結果をフォームへ反映します。",
-      transport: "交通費を複数行まとめて貼り付け、必要な行だけ下書き保存します。",
-      pasmo: "PASMO明細PDFから交通費候補を抽出し、物販やチャージは除外候補にします。",
-    }[activeInputMode];
-  }
-
-  if (isPasmoMode) {
-    transportBulkStatus.textContent = "PASMO PDFを選択して取込してください。交通費候補だけを選んで下書き保存できます。";
-  } else if (isTransportMode) {
-    transportBulkStatus.textContent = "交通費をまとめて入力できます。";
-  }
 }
 
 async function loadDashboard() {
@@ -684,10 +575,8 @@ async function loadDashboard() {
   const dashboard = Array.isArray(data) ? data[0] : data;
   if (!dashboard) return;
   renderDashboardSummary(dashboard.summary || {});
-  if (!selectedDashboardFiscalMonthDate()) {
-    renderRank(storeRank, dashboard.stores || [], "store_name");
-    renderRank(departmentRank, dashboard.departments || [], "department_name");
-  }
+  renderRank(storeRank, dashboard.stores || [], "store_name");
+  renderRank(departmentRank, dashboard.departments || [], "department_name");
 }
 
 function renderDashboardSummary(summary) {
@@ -711,24 +600,12 @@ function renderRank(container, rows, nameKey) {
   `).join("");
 }
 
-function renderDashboardMonthSummary(rows) {
-  renderDashboardSummary({
-    total_count: rows.length,
-    pending_count: rows.filter((row) =>
-      ["manager_pending", "accounting_pending", "executive_pending"].includes(row.status)
-    ).length,
-    settlement_pending_count: rows.filter((row) => row.status === "settlement_pending").length,
-    high_risk_count: rows.filter((row) => aiReviewFlags(row).length > 0).length,
-  });
-}
-
 function initializeMonthlyFiscalMonth() {
   if (!monthlyFiscalMonth) return;
   const now = new Date();
   const value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   monthlyFiscalMonth.value = value;
   if (monthlyCloseFiscalMonth) monthlyCloseFiscalMonth.value = value;
-  if (dashboardFiscalMonth) dashboardFiscalMonth.value = value;
 }
 
 function selectedFiscalMonthDate() {
@@ -741,31 +618,6 @@ function selectedCloseFiscalMonthDate() {
   const value = monthlyCloseFiscalMonth?.value || monthlyFiscalMonth?.value;
   if (!value) return null;
   return `${value}-01`;
-}
-
-function selectedDashboardFiscalMonthDate() {
-  const value = dashboardFiscalMonth?.value || monthlyFiscalMonth?.value;
-  if (!value) return null;
-  return `${value}-01`;
-}
-
-async function handleDashboardMonthChange() {
-  if (dashboardFiscalMonth?.value && monthlyFiscalMonth) {
-    monthlyFiscalMonth.value = dashboardFiscalMonth.value;
-  }
-  renderAccountingOps();
-  renderProductionReadiness();
-  await loadExecutiveMonthlyReport();
-}
-
-async function handleMonthlyFiscalMonthChange() {
-  if (monthlyFiscalMonth?.value && dashboardFiscalMonth) {
-    dashboardFiscalMonth.value = monthlyFiscalMonth.value;
-  }
-  await loadMonthlyReports();
-  renderAccountingOps();
-  renderProductionReadiness();
-  await loadExecutiveMonthlyReport();
 }
 
 function fiscalMonthFromExpenseDate(expenseDate) {
@@ -805,9 +657,7 @@ async function loadMonthlyReports() {
     ["draft", "returned"].includes(report.status)
   ) || reportsForSelectedMonth[0] || null;
   renderMonthlyReports();
-  renderClaims();
   await loadMonthlyCloseStatus();
-  renderProductionReadiness();
 }
 
 function renderMonthlyReports() {
@@ -911,7 +761,7 @@ function monthlyReportKindLabel(report) {
 function renderMonthlyAccountingReports() {
   if (!monthlyAccountingPanel || !monthlyAccountingList) return;
 
-  const canAccounting = canUseAccountingFeatures();
+  const canAccounting = hasRole(currentEmployee, "accounting") || hasRole(currentEmployee, "executive");
   if (!canAccounting) {
     updateViewVisibility();
     return;
@@ -962,7 +812,7 @@ function renderMonthlyAccountingReports() {
 
 async function loadMonthlyCloseStatus() {
   if (!monthlyCloseStatus || !monthlyCloseButton) return;
-  const canAccounting = canUseAccountingFeatures();
+  const canAccounting = hasRole(currentEmployee, "accounting") || hasRole(currentEmployee, "executive");
   if (!canAccounting) {
     monthlyCloseStatus.textContent = "経理・幹部権限で表示されます。";
     monthlyCloseButton.disabled = true;
@@ -1043,7 +893,7 @@ async function closeSelectedMonthlyPeriod() {
 }
 
 function canActOnMonthlyReport(report, action) {
-  const canAccounting = canUseAccountingFeatures();
+  const canAccounting = hasRole(currentEmployee, "accounting") || hasRole(currentEmployee, "executive");
   if (!canAccounting) return false;
   if (action === "approve" || action === "return") return report.status === "accounting_pending";
   if (action === "settle") return report.status === "settlement_pending";
@@ -1215,47 +1065,10 @@ async function loadClaims() {
   claimsCache = data || [];
   await loadAuditLogsForClaims(claimsCache);
   await loadExportedClaimHistoryForClaims(claimsCache);
-  await loadPasmoAuditForClaims(claimsCache);
   renderClaims();
-  renderCsvPreflight();
   renderRoleInsight();
   renderAccountingOps();
-  renderProductionReadiness();
   await loadExecutiveMonthlyReport();
-}
-
-async function loadPasmoAuditForClaims(rows) {
-  pasmoAuditCache = new Map();
-  const ids = rows.map((row) => row.id).filter(Boolean);
-  if (!ids.length) return;
-
-  const { data, error } = await supabase
-    .schema("finance")
-    .from("pasmo_import_lines")
-    .select(`
-      id,
-      expense_claim_id,
-      line_index,
-      raw_text,
-      route,
-      amount,
-      used_date,
-      saved_at,
-      pasmo_import_batches (
-        source_file_name,
-        created_at
-      )
-    `)
-    .in("expense_claim_id", ids);
-
-  if (error) {
-    console.warn(error);
-    return;
-  }
-
-  (data || []).forEach((row) => {
-    if (row.expense_claim_id) pasmoAuditCache.set(row.expense_claim_id, row);
-  });
 }
 
 async function loadExportedClaimHistoryForClaims(rows) {
@@ -1338,46 +1151,14 @@ function filterClaims(rows) {
   if (filter === "csv_exported") {
     return rows.filter((row) => exportedClaimCache.has(row.id));
   }
-  if (filter === "csv_ready") {
-    return rows.filter((row) => row.status === "settled" && !exportedClaimCache.has(row.id));
-  }
-  if (filter === "csv_done") {
-    return rows.filter((row) => row.status === "settled" && exportedClaimCache.has(row.id));
-  }
-  if (filter === "cancellable") {
-    return rows.filter((row) => canCancelClaim(row));
-  }
-  if (filter === "regular_monthly") {
-    return rows.filter((row) => monthlyReportKindForClaim(row) === "regular");
-  }
-  if (filter === "supplemental_monthly") {
-    return rows.filter((row) => monthlyReportKindForClaim(row) === "supplemental");
-  }
   return rows.filter((row) => row.status === filter);
-}
-
-function monthlyReportForClaim(claim) {
-  if (!claim?.monthly_report_id) return null;
-  return monthlyReportsCache.find((report) => report.id === claim.monthly_report_id) || null;
-}
-
-function monthlyReportKindForClaim(claim) {
-  const report = monthlyReportForClaim(claim);
-  if (!report) return claim?.monthly_report_id ? "unknown" : "unattached";
-  return report.report_kind === "supplemental" ? "supplemental" : "regular";
-}
-
-function monthlyReportKindLabelForClaim(claim) {
-  const report = monthlyReportForClaim(claim);
-  if (!report) return "";
-  return monthlyReportKindLabel(report);
 }
 
 function canActOnClaim(row) {
   if (row.status === "manager_pending") return hasRole(currentEmployee, "manager") || hasRole(currentEmployee, "executive");
-  if (row.status === "accounting_pending") return canUseAccountingFeatures();
+  if (row.status === "accounting_pending") return hasRole(currentEmployee, "accounting") || hasRole(currentEmployee, "executive");
   if (row.status === "executive_pending") return hasRole(currentEmployee, "executive");
-  if (row.status === "settlement_pending") return canUseAccountingFeatures();
+  if (row.status === "settlement_pending") return hasRole(currentEmployee, "accounting") || hasRole(currentEmployee, "executive");
   return false;
 }
 
@@ -1401,7 +1182,7 @@ function renderRoleInsight() {
       note: "店舗の承認・差戻し対象",
     });
   }
-  if (canUseAccountingFeatures()) {
+  if (hasRole(currentEmployee, "accounting")) {
     insights.push({
       label: "経理確認",
       value: `${rows.filter((row) => row.status === "accounting_pending").length}件`,
@@ -1443,36 +1224,31 @@ function renderRoleInsight() {
 
 function renderAccountingOps() {
   if (!accountingOps) return;
-  if (!canUseAccountingFeatures()) {
+  if (!hasRole(currentEmployee, "accounting") && !hasRole(currentEmployee, "executive")) {
     accountingOps.innerHTML = `<p class="muted">経理・幹部権限で表示されます。</p>`;
     return;
   }
 
-  const fiscalMonth = selectedDashboardFiscalMonthDate();
-  const dashboardClaims = fiscalMonth
-    ? claimsCache.filter((row) => isClaimInFiscalMonth(row, fiscalMonth))
-    : claimsCache;
-  renderDashboardMonthSummary(dashboardClaims);
-  const settledClaims = dashboardClaims.filter((row) => row.status === "settled");
-  const csvUnexported = settledClaims.filter((row) => !exportedClaimCache.has(row.id));
-  const csvExported = settledClaims.filter((row) => exportedClaimCache.has(row.id));
-  const noReceipt = dashboardClaims.filter((row) => !Array.isArray(row.expense_receipts) || row.expense_receipts.length === 0);
-  const aiReview = dashboardClaims.filter((row) => aiReviewFlags(row).length > 0);
-  const highAmount = dashboardClaims.filter((row) => Number(row.amount || 0) >= 50000);
+  const settlementPending = claimsCache.filter((row) => row.status === "settlement_pending");
+  const csvUnexported = settlementPending.filter((row) => !exportedClaimCache.has(row.id));
+  const csvExported = settlementPending.filter((row) => exportedClaimCache.has(row.id));
+  const noReceipt = claimsCache.filter((row) => !Array.isArray(row.expense_receipts) || row.expense_receipts.length === 0);
+  const aiReview = claimsCache.filter((row) => aiReviewFlags(row).length > 0);
+  const highAmount = claimsCache.filter((row) => Number(row.amount || 0) >= 50000);
 
   const cards = [
     {
       label: "CSV未出力",
       value: `${csvUnexported.length}件`,
-      note: "弥生取込前に出力が必要な精算済み明細",
-      filter: "csv_ready",
+      note: "弥生取込前に出力が必要な精算待ち明細",
+      filter: "csv_unexported",
       tone: csvUnexported.length ? "warning" : "ok",
     },
     {
       label: "CSV出力済み",
       value: `${csvExported.length}件`,
       note: "二重取込に注意する明細",
-      filter: "csv_done",
+      filter: "csv_exported",
       tone: "neutral",
     },
     {
@@ -1508,105 +1284,18 @@ function renderAccountingOps() {
   });
 }
 
-function renderProductionReadiness() {
-  if (!productionReadiness) return;
-  if (!canUseAccountingFeatures()) {
-    productionReadiness.innerHTML = `<p class="muted">経理・幹部権限で表示されます。</p>`;
-    return;
-  }
-
-  const fiscalMonth = selectedDashboardFiscalMonthDate();
-  const monthClaims = fiscalMonth
-    ? claimsCache.filter((row) => isClaimInFiscalMonth(row, fiscalMonth))
-    : claimsCache;
-  const monthReports = fiscalMonth
-    ? monthlyReportsCache.filter((report) => report.fiscal_month === fiscalMonth)
-    : monthlyReportsCache;
-
-  const settledClaims = monthClaims.filter((row) => row.status === "settled");
-  const csvUnexported = settledClaims.filter((row) => !exportedClaimCache.has(row.id));
-  const noReceipt = monthClaims.filter((row) => !Array.isArray(row.expense_receipts) || row.expense_receipts.length === 0);
-  const pendingReports = monthReports.filter((report) => ["accounting_pending", "settlement_pending"].includes(report.status));
-  const draftReports = monthReports.filter((report) => ["draft", "returned"].includes(report.status));
-  const closedReports = monthReports.filter((report) => report.status === "settled");
-
-  const checks = [
-    readinessItem({
-      label: "弥生CSV未出力",
-      value: `${csvUnexported.length}件`,
-      ok: csvUnexported.length === 0,
-      note: csvUnexported.length ? "弥生取込CSVの出力対象を確認" : "二重取込リスクは低い状態です",
-      filter: "csv_ready",
-    }),
-    readinessItem({
-      label: "レシート未添付",
-      value: `${noReceipt.length}件`,
-      ok: noReceipt.length === 0,
-      note: noReceipt.length ? "差戻し候補として確認" : "添付漏れはありません",
-      filter: "ai_review",
-    }),
-    readinessItem({
-      label: "経理未処理パック",
-      value: `${pendingReports.length}件`,
-      ok: pendingReports.length === 0,
-      note: pendingReports.length ? "経理確認または精算済みに進める対象があります" : "月次パックの処理待ちはありません",
-      view: "accounting",
-    }),
-    readinessItem({
-      label: "未提出・差戻しパック",
-      value: `${draftReports.length}件`,
-      ok: draftReports.length === 0,
-      note: draftReports.length ? "申請者側で提出または再提出が必要です" : "申請者側で止まっている月次パックはありません",
-      view: "monthly",
-    }),
-    readinessItem({
-      label: "締め済み精算",
-      value: `${closedReports.length}件`,
-      ok: closedReports.length > 0 || monthClaims.length === 0,
-      note: closedReports.length ? "対象月に精算済みパックがあります" : "月次締め前に残件を確認してください",
-      view: "accounting",
-    }),
-  ];
-
-  productionReadiness.innerHTML = checks.map((item) => `
-    <button type="button" class="readiness-item ${item.ok ? "is-ok" : "is-warning"}" data-readiness-view="${escapeHtml(item.view || "")}" data-readiness-filter="${escapeHtml(item.filter || "")}">
-      <span>${escapeHtml(item.label)}</span>
-      <strong>${escapeHtml(item.value)}</strong>
-      <small>${escapeHtml(item.note)}</small>
-    </button>
-  `).join("");
-
-  productionReadiness.querySelectorAll("button[data-readiness-view], button[data-readiness-filter]").forEach((button) => {
-    button.addEventListener("click", () => {
-      if (button.dataset.readinessFilter) {
-        setActiveView("reports");
-        claimStatusFilter.value = button.dataset.readinessFilter;
-        renderClaims();
-        return;
-      }
-      if (button.dataset.readinessView) setActiveView(button.dataset.readinessView);
-    });
-  });
-}
-
-function readinessItem(item) {
-  return item;
-}
-
 async function loadExecutiveMonthlyReport() {
   if (!executiveMonthlyReport) return;
-  if (!canUseAccountingFeatures()) {
+  if (!hasRole(currentEmployee, "executive") && !hasRole(currentEmployee, "accounting")) {
     executiveMonthlyReport.innerHTML = `<p class="muted">幹部・経理権限で表示されます。</p>`;
     if (monthlyAiComment) monthlyAiComment.textContent = "幹部・経理権限で表示されます。";
     return;
   }
 
-  const fiscalMonth = selectedDashboardFiscalMonthDate();
+  const fiscalMonth = selectedFiscalMonthDate();
   if (!fiscalMonth) {
     executiveMonthlyReport.innerHTML = `<p class="muted">対象月を選択してください。</p>`;
     if (monthlyAiComment) monthlyAiComment.textContent = "対象月を選択してください。";
-    renderRank(storeRank, [], "store_name");
-    renderRank(departmentRank, [], "department_name");
     return;
   }
 
@@ -1627,13 +1316,9 @@ async function loadExecutiveMonthlyReport() {
 
   if (!data) {
     executiveMonthlyReport.innerHTML = `<p class="muted">${escapeHtml(formatMonth(fiscalMonth))} の経費データはありません。</p>`;
-    renderRank(storeRank, [], "store_name");
-    renderRank(departmentRank, [], "department_name");
     return;
   }
 
-  renderRank(storeRank, Array.isArray(data.stores) ? data.stores : [], "store_name");
-  renderRank(departmentRank, Array.isArray(data.departments) ? data.departments : [], "department_name");
   renderExecutiveMonthlyReport(data);
 }
 
@@ -1730,7 +1415,7 @@ function renderHighAmountClaims(rows) {
 }
 
 async function loadEmployeeAdmin() {
-  if (!canUseAdminFeatures()) {
+  if (!hasRole(currentEmployee, "executive")) {
     employeePanel.hidden = true;
     return;
   }
@@ -1748,7 +1433,6 @@ async function loadEmployeeAdmin() {
   employeeOptions = Array.isArray(data) ? data[0] : data;
   employeePanel.hidden = false;
   renderEmployeeFormOptions();
-  setEmployeeFormReadOnly();
   renderEmployeeList();
 }
 
@@ -1772,24 +1456,19 @@ function renderEmployeeList() {
     return;
   }
 
-  employeeList.innerHTML = employees.map((employee) => {
-    const positionName = displayPositionName(employee);
-    const jobTypeName = displayJobTypeName(employee);
-    return `
+  employeeList.innerHTML = employees.map((employee) => `
     <article class="employee-row">
       <div>
         <div class="claim-title">${escapeHtml(employee.name || employee.email)}</div>
         <div class="claim-meta">${escapeHtml(employee.email || "")} / ${escapeHtml(employee.employee_code || "コード未設定")}</div>
-        <div class="claim-meta">${escapeHtml(employee.corporation_name || "法人なし")} / ${escapeHtml(employee.store_name || "店舗なし")} / ${escapeHtml(employee.department_name || "部署なし")} / 役職: ${escapeHtml(positionName)}</div>
-        <div class="claim-meta">職種: ${escapeHtml(jobTypeName)}</div>
+        <div class="claim-meta">${escapeHtml(employee.corporation_name || "法人なし")} / ${escapeHtml(employee.store_name || "店舗なし")} / ${escapeHtml(employee.department_name || "部署なし")} / ${escapeHtml(employee.position_name || "役職なし")}</div>
       </div>
       <div class="employee-actions">
         <span class="muted">${escapeHtml(employee.employment_status || "active")}</span>
-        <button type="button" data-edit-employee="${escapeHtml(employee.id)}">確認</button>
+        <button type="button" data-edit-employee="${escapeHtml(employee.id)}">編集</button>
       </div>
     </article>
-  `;
-  }).join("");
+  `).join("");
 
   employeeList.querySelectorAll("button[data-edit-employee]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -1807,26 +1486,11 @@ function fillEmployeeForm(employee) {
   employeeForm.elements.corporationId.value = employee.corporation_id || "";
   employeeForm.elements.storeId.value = employee.store_id || "";
   employeeForm.elements.departmentId.value = employee.department_id || "";
-  employeeForm.elements.positionId.value = isJobTypeLabelInPosition(employee.position_name) ? "" : employee.position_id || "";
+  employeeForm.elements.positionId.value = employee.position_id || "";
   employeeForm.elements.firebaseUid.value = employee.firebase_uid || "";
   employeeForm.elements.employmentStatus.value = employee.employment_status || "active";
   setEmployeeFormReadOnly();
   employeeForm.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function isJobTypeLabelInPosition(positionName) {
-  return ["レセプション"].includes(String(positionName || "").trim());
-}
-
-function displayPositionName(employee) {
-  if (isJobTypeLabelInPosition(employee.position_name)) return "未設定";
-  return employee.position_name || "役職なし";
-}
-
-function displayJobTypeName(employee) {
-  if (employee.job_type_name && employee.job_type_name !== "未設定") return employee.job_type_name;
-  if (isJobTypeLabelInPosition(employee.position_name)) return employee.position_name;
-  return "未設定";
 }
 
 function resetEmployeeForm() {
@@ -1851,7 +1515,7 @@ async function saveEmployee(event) {
 }
 
 async function loadPermissionAdmin() {
-  if (!canUseAdminFeatures()) {
+  if (!hasRole(currentEmployee, "executive")) {
     permissionPanel.hidden = true;
     return;
   }
@@ -1951,83 +1615,43 @@ async function assignPermission(event) {
 
 async function handleReceiptSelected() {
   uploadedReceiptPath = "";
-  uploadedReceiptMeta = null;
-  batchReceiptItems = [];
-  renderReceiptBatchList();
-
-  const files = Array.from(receiptInput.files || []);
-  if (!files.length) {
+  const file = receiptInput.files?.[0];
+  if (!file) {
     receiptStatus.textContent = "レシート未選択";
     return;
   }
 
-  if (files.length > 10) {
-    receiptInput.value = "";
-    receiptStatus.textContent = "一度に読み込めるレシートは10枚までです。";
-    alert("一度に読み込めるレシートは10枚までです。");
-    return;
-  }
-
-  receiptStatus.textContent = files.length === 1
-    ? `${files[0].name} を準備中...`
-    : `${files.length}枚のレシートをアップロード中...`;
+  receiptStatus.textContent = `${file.name} を準備中...`;
 
   try {
+    const uploadFile = file.type.startsWith("image/")
+      ? await compressImage(file)
+      : file;
     const employeeId = currentEmployee?.id;
     if (!employeeId) {
       receiptStatus.textContent = "ログイン社員が未解決です。先にAuth/Core DB連携を確認してください。";
       return;
     }
 
-    for (const file of files) {
-      const uploaded = await uploadReceiptFile(file, employeeId);
-      batchReceiptItems.push({
-        ...uploaded,
-        status: "uploaded",
-        result: null,
-        error: "",
+    const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+    const path = `${employeeId}/${crypto.randomUUID()}/${safeName}`;
+    const { error } = await supabase.storage
+      .from("expense-receipts")
+      .upload(path, uploadFile, {
+        cacheControl: "3600",
+        contentType: uploadFile.type || file.type,
+        upsert: false,
       });
-      renderReceiptBatchList();
-    }
 
-    uploadedReceiptPath = batchReceiptItems[0]?.path || "";
-    uploadedReceiptMeta = batchReceiptItems[0] || null;
-    receiptStatus.textContent = files.length === 1
-      ? "レシートをアップロードしました"
-      : `${files.length}枚をアップロードしました。レシートAI解析でまとめて解析できます。`;
+    if (error) throw error;
+    uploadedReceiptPath = path;
+    receiptStatus.textContent = "レシートをアップロードしました";
   } catch (error) {
     receiptStatus.textContent = error.message || String(error);
   }
 }
 
-async function uploadReceiptFile(file, employeeId) {
-  const uploadFile = file.type.startsWith("image/")
-    ? await compressImage(file)
-    : file;
-  const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-  const path = `${employeeId}/${crypto.randomUUID()}/${safeName}`;
-  const { error } = await supabase.storage
-    .from("expense-receipts")
-    .upload(path, uploadFile, {
-      cacheControl: "3600",
-      contentType: uploadFile.type || file.type,
-      upsert: false,
-    });
-
-  if (error) throw error;
-  return {
-    path,
-    fileName: file.name,
-    mimeType: uploadFile.type || file.type || "",
-  };
-}
-
 async function analyzeReceipt() {
-  if (batchReceiptItems.length > 1) {
-    await analyzeReceiptBatch();
-    return;
-  }
-
   const ocrText = document.querySelector("#ocrText").value;
   if (!uploadedReceiptPath && !ocrText.trim()) {
     alert("レシート画像を選ぶか、OCRテキストを入力してください。");
@@ -2063,68 +1687,10 @@ async function analyzeReceipt() {
     data = parseReceiptTextFallback(ocrText);
     receiptStatus.textContent = "Edge Function未接続のため、入力テキストから簡易解析しました。";
   } else {
-    const warning = Array.isArray(data?.warnings) && data.warnings.length ? ` / ${data.warnings[0]}` : "";
-    receiptStatus.textContent = data?.source === "text_fallback"
-      ? `OCR補助テキストから簡易解析しました。内容を確認してください。${warning}`
-      : `レシート画像のAI解析が完了しました。内容を確認してください。${warning}`;
+    receiptStatus.textContent = "AI解析が完了しました。内容を確認してください。";
   }
 
   fillFormFromReceipt(data || {});
-  if (batchReceiptItems.length === 1) {
-    batchReceiptItems[0].result = data || null;
-    batchReceiptItems[0].status = data ? "analyzed" : batchReceiptItems[0].status;
-    batchReceiptItems[0].error = error?.message || "";
-    renderReceiptBatchList();
-  }
-}
-
-async function analyzeReceiptBatch() {
-  const ocrText = document.querySelector("#ocrText").value;
-  if (!batchReceiptItems.length) {
-    alert("レシート画像を選んでください。");
-    return;
-  }
-
-  analyzeReceiptButton.disabled = true;
-  let doneCount = 0;
-  let errorCount = 0;
-
-  for (const item of batchReceiptItems) {
-    if (item.status === "saved") {
-      doneCount += 1;
-      continue;
-    }
-
-    item.status = "analyzing";
-    item.error = "";
-    renderReceiptBatchList();
-    receiptStatus.textContent = `${doneCount + 1}/${batchReceiptItems.length}枚目をAI解析中...`;
-
-    try {
-      const { data, error } = await supabase.functions.invoke("analyze-receipt", {
-        body: {
-          receiptPath: item.path,
-          ocrText,
-        },
-      });
-      if (error) throw error;
-      item.result = data || {};
-      item.status = "analyzed";
-      doneCount += 1;
-    } catch (error) {
-      item.status = "error";
-      item.error = error.message || String(error);
-      errorCount += 1;
-    }
-    renderReceiptBatchList();
-  }
-
-  analyzeReceiptButton.disabled = false;
-  const firstAnalyzed = batchReceiptItems.find((item) => item.status === "analyzed" && item.result);
-  if (firstAnalyzed) applyBatchReceiptToForm(batchReceiptItems.indexOf(firstAnalyzed), { silent: true });
-  receiptStatus.textContent = errorCount
-    ? `${doneCount}件を解析しました。${errorCount}件は確認が必要です。`
-    : `${doneCount}件のレシートAI解析が完了しました。候補を確認してください。`;
 }
 
 function parseReceiptTextFallback(text) {
@@ -2179,508 +1745,6 @@ function fillFormFromReceipt(data) {
     : data.vendor || "";
   setField("title", title);
   suggestMissingClaimFields();
-  updateExpenseDateMonthHint(data.expenseDate);
-}
-
-function renderReceiptBatchList() {
-  if (!receiptBatchList) return;
-  if (!batchReceiptItems.length) {
-    receiptBatchList.hidden = true;
-    receiptBatchList.innerHTML = "";
-    return;
-  }
-
-  receiptBatchList.hidden = false;
-  const isBatch = batchReceiptItems.length > 1;
-  receiptBatchList.innerHTML = `
-    <div class="receipt-batch-header">
-      <strong>${isBatch ? "まとめ読み込み候補" : "レシート候補"}</strong>
-      <span class="muted">${batchReceiptItems.length}枚 / 最大10枚</span>
-    </div>
-    <div class="receipt-batch-items">
-      ${batchReceiptItems.map((item, index) => renderReceiptBatchItem(item, index)).join("")}
-    </div>
-  `;
-}
-
-function renderReceiptBatchItem(item, index) {
-  const result = item.result || {};
-  const title = result.vendor || item.fileName || `レシート${index + 1}`;
-  const amount = result.amount ? `${Number(result.amount).toLocaleString("ja-JP")}円` : "金額未確定";
-  const date = result.expenseDate || "日付未確定";
-  const statusLabel = {
-    uploaded: "未解析",
-    analyzing: "解析中",
-    analyzed: "解析済み",
-    saved: "下書き保存済み",
-    error: "要確認",
-  }[item.status] || item.status;
-  const warning = Array.isArray(result.warnings) && result.warnings.length ? result.warnings[0] : item.error;
-  const disabled = item.status === "analyzing" ? "disabled" : "";
-  return `
-    <article class="receipt-batch-card ${item.status === "error" ? "is-error" : ""}">
-      <div>
-        <div class="receipt-batch-title">${escapeHtml(title)}</div>
-        <div class="muted">${escapeHtml(date)} / ${escapeHtml(amount)} / ${escapeHtml(result.purposeCandidate || "用途未確定")}</div>
-        <div class="muted">${escapeHtml(item.fileName || "")}</div>
-        ${warning ? `<div class="receipt-batch-warning">${escapeHtml(warning)}</div>` : ""}
-      </div>
-      <div class="receipt-batch-actions">
-        <span class="receipt-batch-status">${escapeHtml(statusLabel)}</span>
-        <button type="button" class="secondary" data-batch-action="apply" data-index="${index}" ${result.amount ? "" : "disabled"}>フォームへ反映</button>
-        <button type="button" data-batch-action="save" data-index="${index}" ${result.amount && item.status !== "saved" ? disabled : "disabled"}>下書き保存</button>
-      </div>
-    </article>
-  `;
-}
-
-async function handleReceiptBatchClick(event) {
-  const button = event.target.closest("[data-batch-action]");
-  if (!button) return;
-  const index = Number(button.dataset.index);
-  const action = button.dataset.batchAction;
-  if (!Number.isInteger(index) || !batchReceiptItems[index]) return;
-
-  if (action === "apply") {
-    applyBatchReceiptToForm(index);
-    return;
-  }
-
-  if (action === "save") {
-    button.disabled = true;
-    await saveBatchReceiptCandidate(index);
-  }
-}
-
-function applyBatchReceiptToForm(index, options = {}) {
-  const item = batchReceiptItems[index];
-  if (!item?.result) return;
-  uploadedReceiptPath = item.path;
-  uploadedReceiptMeta = item;
-  fillFormFromReceipt(item.result);
-  receiptStatus.textContent = options.silent
-    ? receiptStatus.textContent
-    : `${item.fileName} の解析結果をフォームへ反映しました。`;
-}
-
-async function saveBatchReceiptCandidate(index) {
-  const item = batchReceiptItems[index];
-  if (!item?.result) return;
-  const result = item.result;
-  if (!result.expenseDate || !result.amount) {
-    alert("日付と金額が未確定のため保存できません。フォームへ反映して確認してください。");
-    return;
-  }
-
-  const title = result.vendor && result.amount
-    ? `${result.vendor} ${Number(result.amount).toLocaleString("ja-JP")}円`
-    : result.vendor || item.fileName || "レシート経費";
-  const fd = new FormData();
-  fd.set("title", title);
-  fd.set("expenseDate", result.expenseDate);
-  fd.set("amount", String(result.amount));
-  fd.set("tax", String(result.tax || 0));
-  fd.set("vendor", result.vendor || "");
-  fd.set("paymentMethod", result.paymentMethod || "");
-  fd.set("purpose", result.purposeCandidate || "備品購入");
-  fd.set("accountTitleCandidate", result.accountTitleCandidate || "消耗品費");
-  fd.set("highAmountReason", "");
-
-  const closeStatus = await getCloseStatusForExpenseDate(result.expenseDate);
-  if (closeStatus?.close_status === "closed" && !confirm(`${formatMonth(closeStatus.fiscal_month)} は月次締め済みです。この明細を締め後追加精算として保存しますか？`)) {
-    return;
-  }
-
-  const payload = {
-    p_title: fd.get("title"),
-    p_expense_date: fd.get("expenseDate"),
-    p_amount: Number(fd.get("amount")),
-    p_tax: Number(fd.get("tax") || 0),
-    p_vendor_name_raw: fd.get("vendor") || "",
-    p_payment_method: fd.get("paymentMethod") || "",
-    p_purpose: buildPurposeWithReason(fd),
-    p_ai_account_title_candidate: fd.get("accountTitleCandidate") || "",
-  };
-
-  const { data, error } = await supabase
-    .schema("finance")
-    .rpc("create_expense_claim", payload);
-
-  if (error) {
-    item.status = "error";
-    item.error = error.message;
-    renderReceiptBatchList();
-    alert(error.message);
-    return;
-  }
-
-  if (data?.id) {
-    await supabase
-      .schema("finance")
-      .from("expense_receipts")
-      .insert({
-        expense_claim_id: data.id,
-        storage_path: item.path,
-        file_name: item.fileName || "",
-        mime_type: item.mimeType || "",
-      });
-  }
-
-  try {
-    await attachClaimToMonthlyReport(data, result.expenseDate);
-    setMonthlyFiscalMonthFromExpenseDate(result.expenseDate);
-  } catch (monthlyError) {
-    item.error = `明細は保存しましたが、月次追加に失敗しました: ${monthlyError.message}`;
-  }
-
-  item.status = "saved";
-  renderReceiptBatchList();
-  receiptStatus.textContent = `${item.fileName} を下書き保存しました。`;
-  await loadDashboard();
-  await loadClaims();
-  await loadMonthlyReports();
-}
-
-function parseTransportBulkInput() {
-  const text = String(transportBulkText?.value || "").trim();
-  if (!text) {
-    transportBulkStatus.textContent = "交通費の明細を入力してください。";
-    return;
-  }
-
-  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  if (lines.length > 50) {
-    alert("交通費の一括入力は一度に50件までにしてください。");
-    return;
-  }
-
-  transportBulkCandidates = lines.map(parseTransportLine).filter(Boolean);
-  renderTransportBulkList();
-  transportBulkStatus.textContent = transportBulkCandidates.length
-    ? `${transportBulkCandidates.length}件の交通費候補を読み込みました。内容を確認してください。`
-    : "読み込める交通費候補がありませんでした。";
-}
-
-function parseTransportLine(line, index) {
-  const dateMatch = line.match(/(20\d{2})[\/\-.年](\d{1,2})[\/\-.月](\d{1,2})/);
-  const amountMatches = [...line.matchAll(/(\d{1,3}(?:,\d{3})+|\d+)\s*円?/g)];
-  const amountMatch = amountMatches.at(-1);
-  if (!dateMatch || !amountMatch) {
-    return {
-      id: crypto.randomUUID(),
-      selected: false,
-      status: "error",
-      error: "日付または金額を読み取れませんでした",
-      rawLine: line,
-      title: `交通費 ${index + 1}`,
-    };
-  }
-
-  const expenseDate = `${dateMatch[1]}-${dateMatch[2].padStart(2, "0")}-${dateMatch[3].padStart(2, "0")}`;
-  const amount = Number(amountMatch[1].replaceAll(",", ""));
-  const cleaned = line
-    .replace(dateMatch[0], "")
-    .replace(amountMatch[0], "")
-    .replace(/[,\t]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  const route = cleaned || "交通費";
-  return {
-    id: crypto.randomUUID(),
-    selected: true,
-    status: "ready",
-    error: "",
-    rawLine: line,
-    expenseDate,
-    amount,
-    tax: 0,
-    route,
-    title: `${route} 交通費`,
-    vendor: route,
-    paymentMethod: transportPaymentMethod?.value || "立替",
-    purpose: "交通費",
-    accountTitleCandidate: "旅費交通費",
-  };
-}
-
-function handlePasmoPdfSelected() {
-  const file = pasmoPdfFile?.files?.[0];
-  pasmoPdfStatus.textContent = file ? `${file.name} を選択中` : "PDF未選択";
-}
-
-async function analyzePasmoPdf() {
-  const file = pasmoPdfFile?.files?.[0];
-  if (!file) {
-    alert("PASMO明細PDFを選択してください。");
-    return;
-  }
-  if (file.type && file.type !== "application/pdf") {
-    alert("PDFファイルを選択してください。");
-    return;
-  }
-  const employeeId = currentEmployee?.id;
-  if (!employeeId) {
-    pasmoPdfStatus.textContent = "ログイン社員が未解決です。";
-    return;
-  }
-
-  analyzePasmoPdfButton.disabled = true;
-  pasmoPdfStatus.textContent = "PASMO PDFを保存中...";
-
-  try {
-    const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-    const path = `${employeeId}/pasmo/${crypto.randomUUID()}/${safeName}`;
-    const { error: uploadError } = await supabase.storage
-      .from("expense-receipts")
-      .upload(path, file, {
-        cacheControl: "3600",
-        contentType: "application/pdf",
-        upsert: false,
-      });
-    if (uploadError) throw uploadError;
-
-    pasmoPdfStatus.textContent = "PASMO PDFをAI解析中...";
-    const { data, error } = await supabase.functions.invoke("analyze-pasmo-pdf", {
-      body: { pdfPath: path },
-    });
-    if (error) throw error;
-
-    const sourcePdf = { path, fileName: file.name, mimeType: "application/pdf" };
-    const lines = Array.isArray(data?.lines) ? data.lines : [];
-    let auditLines = [];
-    let auditSaved = false;
-    try {
-      const audit = await savePasmoImportAudit({ ...sourcePdf, lines });
-      auditLines = audit.lines || [];
-      auditSaved = true;
-    } catch (auditError) {
-      pasmoPdfStatus.textContent = `PASMO PDFを解析しましたが、監査保存に失敗しました: ${auditError.message || auditError}`;
-    }
-
-    const imported = lines.length
-      ? lines.map((line, index) => pasmoLineToTransportCandidate(line, index, sourcePdf, auditLines[index], auditSaved))
-      : [];
-    transportBulkCandidates = imported;
-    renderTransportBulkList();
-    const recommendedCount = imported.filter((item) => item.selected).length;
-    const excludedCount = imported.length - recommendedCount;
-    pasmoPdfStatus.textContent = auditSaved
-      ? `${recommendedCount}件を経費候補、${excludedCount}件を除外候補として読み込みました。監査記録も保存済みです。`
-      : `${recommendedCount}件を経費候補、${excludedCount}件を除外候補として読み込みました。`;
-    transportBulkStatus.textContent = "内容を確認して、必要な交通費だけ下書き保存してください。";
-  } catch (error) {
-    pasmoPdfStatus.textContent = error.message || String(error);
-  } finally {
-    analyzePasmoPdfButton.disabled = false;
-  }
-}
-
-async function savePasmoImportAudit({ path, fileName, mimeType, lines }) {
-  const { data: batch, error } = await supabase
-    .schema("finance")
-    .rpc("create_pasmo_import_batch", {
-      p_source_storage_path: path,
-      p_source_file_name: fileName,
-      p_source_mime_type: mimeType || "application/pdf",
-      p_lines: lines,
-    });
-  if (error) throw error;
-
-  const { data: savedLines, error: linesError } = await supabase
-    .schema("finance")
-    .from("pasmo_import_lines")
-    .select("id,line_index")
-    .eq("batch_id", batch.id)
-    .order("line_index", { ascending: true });
-  if (linesError) throw linesError;
-
-  return { batch, lines: savedLines || [] };
-}
-
-function pasmoLineToTransportCandidate(line, index, sourcePdf, auditLine, auditSaved) {
-  const recommended = line.recommended === true && line.usedDate && line.amount;
-  return {
-    id: crypto.randomUUID(),
-    selected: recommended,
-    status: recommended ? "ready" : "excluded",
-    error: recommended ? "" : line.exclusionReason || "経費候補から除外しました",
-    rawLine: line.rawText || line.route || `PASMO明細 ${index + 1}`,
-    expenseDate: line.usedDate || "",
-    amount: Number(line.amount || 0),
-    tax: 0,
-    route: line.route || line.rawText || "交通費",
-    title: `${line.route || "PASMO交通費"} 交通費`,
-    vendor: line.route || "PASMO",
-    paymentMethod: transportPaymentMethod?.value || "交通系IC",
-    purpose: "交通費",
-    accountTitleCandidate: "旅費交通費",
-    sourcePdfPath: sourcePdf.path,
-    sourcePdfFileName: sourcePdf.fileName,
-    sourcePdfMimeType: sourcePdf.mimeType || "application/pdf",
-    lineType: line.lineType || "transport",
-    pasmoLineId: auditLine?.id || null,
-    pasmoLineIndex: auditLine?.line_index ?? index,
-    auditSaved: auditSaved && Boolean(auditLine?.id),
-  };
-}
-
-function renderTransportBulkList() {
-  if (!transportBulkList) return;
-  if (!transportBulkCandidates.length) {
-    transportBulkList.hidden = true;
-    transportBulkList.innerHTML = "";
-    return;
-  }
-
-  transportBulkList.hidden = false;
-  transportBulkList.innerHTML = transportBulkCandidates.map((item, index) => `
-    <article class="transport-candidate ${item.status === "error" ? "is-error" : ""} ${item.status === "excluded" ? "is-excluded" : ""}">
-      <label class="transport-candidate-check">
-        <input type="checkbox" data-transport-index="${index}" ${item.selected ? "checked" : ""} ${item.status === "saved" || item.status === "error" ? "disabled" : ""} />
-        <span>選択</span>
-      </label>
-      <div>
-        <div class="transport-candidate-title">${escapeHtml(item.title || item.rawLine)}</div>
-        <div class="muted">${escapeHtml(item.expenseDate || "日付未確定")} / ${item.amount ? Number(item.amount).toLocaleString("ja-JP") + "円" : "金額未確定"} / ${escapeHtml(item.paymentMethod || "")}</div>
-        <div class="muted">${escapeHtml(item.rawLine || "")}${item.auditSaved ? " / 監査保存済み" : ""}</div>
-        ${item.error ? `<div class="receipt-batch-warning">${escapeHtml(item.error)}</div>` : ""}
-      </div>
-      <div class="transport-candidate-status">${escapeHtml(transportStatusLabel(item.status))}</div>
-    </article>
-  `).join("");
-}
-
-function transportStatusLabel(status) {
-  return {
-    ready: "保存待ち",
-    saving: "保存中",
-    saved: "下書き保存済み",
-    excluded: "除外候補",
-    error: "要確認",
-  }[status] || status;
-}
-
-function handleTransportCandidateChange(event) {
-  const input = event.target.closest("[data-transport-index]");
-  if (!input) return;
-  const index = Number(input.dataset.transportIndex);
-  if (!transportBulkCandidates[index]) return;
-  transportBulkCandidates[index].selected = input.checked;
-  if (input.checked && transportBulkCandidates[index].status === "excluded") {
-    transportBulkCandidates[index].status = "ready";
-  }
-}
-
-function selectAllTransportCandidates() {
-  transportBulkCandidates = transportBulkCandidates.map((item) => ({
-    ...item,
-    selected: item.status === "ready" || item.status === "saving" || item.status === "excluded" ? true : item.selected,
-    status: item.status === "excluded" ? "ready" : item.status,
-  }));
-  renderTransportBulkList();
-}
-
-async function saveSelectedTransportCandidates() {
-  const targets = transportBulkCandidates.filter((item) => item.selected && (item.status === "ready" || item.status === "excluded"));
-  if (!targets.length) {
-    transportBulkStatus.textContent = "保存対象の交通費候補がありません。";
-    return;
-  }
-
-  saveTransportBulkButton.disabled = true;
-  let savedCount = 0;
-  let errorCount = 0;
-
-  for (const item of targets) {
-    item.status = "saving";
-    renderTransportBulkList();
-    try {
-      await saveTransportCandidate(item);
-      item.status = "saved";
-      item.selected = false;
-      savedCount += 1;
-    } catch (error) {
-      item.status = "error";
-      item.error = error.message || String(error);
-      errorCount += 1;
-    }
-    transportBulkStatus.textContent = `${savedCount}/${targets.length}件を保存中...`;
-    renderTransportBulkList();
-  }
-
-  saveTransportBulkButton.disabled = false;
-  transportBulkStatus.textContent = errorCount
-    ? `${savedCount}件を下書き保存しました。${errorCount}件は確認が必要です。`
-    : `${savedCount}件の交通費を下書き保存しました。`;
-
-  await loadDashboard();
-  await loadClaims();
-  await loadMonthlyReports();
-}
-
-async function saveTransportCandidate(item) {
-  if (!item.expenseDate || !item.amount) throw new Error("日付と金額が必要です");
-  const fd = new FormData();
-  fd.set("title", item.title || "交通費");
-  fd.set("expenseDate", item.expenseDate);
-  fd.set("amount", String(item.amount));
-  fd.set("tax", String(item.tax || 0));
-  fd.set("vendor", item.vendor || item.route || "交通費");
-  fd.set("paymentMethod", item.paymentMethod || "立替");
-  fd.set("purpose", item.purpose || "交通費");
-  fd.set("accountTitleCandidate", item.accountTitleCandidate || "旅費交通費");
-  fd.set("highAmountReason", "");
-
-  const closeStatus = await getCloseStatusForExpenseDate(item.expenseDate);
-  if (closeStatus?.close_status === "closed") {
-    item.title = `${item.title}（締め後追加）`;
-  }
-
-  const { data, error } = await supabase
-    .schema("finance")
-    .rpc("create_expense_claim", {
-      p_title: fd.get("title"),
-      p_expense_date: fd.get("expenseDate"),
-      p_amount: Number(fd.get("amount")),
-      p_tax: Number(fd.get("tax") || 0),
-      p_vendor_name_raw: fd.get("vendor") || "",
-      p_payment_method: fd.get("paymentMethod") || "",
-      p_purpose: buildPurposeWithReason(fd),
-      p_ai_account_title_candidate: fd.get("accountTitleCandidate") || "",
-    });
-
-  if (error) throw error;
-
-  if (data?.id && item.sourcePdfPath) {
-    await supabase
-      .schema("finance")
-      .from("expense_receipts")
-      .insert({
-        expense_claim_id: data.id,
-        storage_path: item.sourcePdfPath,
-        file_name: item.sourcePdfFileName || "PASMO明細.pdf",
-        mime_type: item.sourcePdfMimeType || "application/pdf",
-      });
-  }
-
-  if (data?.id && item.pasmoLineId) {
-    const { error: auditError } = await supabase
-      .schema("finance")
-      .rpc("mark_pasmo_import_line_saved", {
-        p_line_id: item.pasmoLineId,
-        p_expense_claim_id: data.id,
-      });
-    if (auditError) {
-      item.error = `明細は保存しましたが、PASMO監査行の更新に失敗しました: ${auditError.message}`;
-    }
-  }
-
-  try {
-    await attachClaimToMonthlyReport(data, item.expenseDate);
-    setMonthlyFiscalMonthFromExpenseDate(item.expenseDate);
-  } catch (monthlyError) {
-    item.error = `明細は保存しましたが、月次追加に失敗しました: ${monthlyError.message}`;
-  }
 }
 
 function setField(name, value) {
@@ -2693,9 +1757,6 @@ function handleClaimFormInput(event) {
   if (!event.target?.name) return;
   if (["vendor", "amount", "expenseDate", "purpose", "paymentMethod"].includes(event.target.name)) {
     suggestMissingClaimFields();
-  }
-  if (event.target.name === "expenseDate") {
-    updateExpenseDateMonthHint(event.target.value);
   }
 }
 
@@ -2825,58 +1886,12 @@ function clearVendorSuggestion() {
   vendorSuggestion.textContent = "";
 }
 
-async function getCloseStatusForExpenseDate(expenseDate) {
-  const fiscalMonth = fiscalMonthFromExpenseDate(expenseDate);
-  if (!fiscalMonth) return null;
-  if (closeStatusCache.has(fiscalMonth)) return closeStatusCache.get(fiscalMonth);
-
-  const { data, error } = await supabase
-    .schema("finance")
-    .from("monthly_expense_close_status")
-    .select("fiscal_month,close_status,closed_at,closed_by_name,total_claim_count,total_amount")
-    .eq("fiscal_month", fiscalMonth)
-    .maybeSingle();
-
-  if (error) {
-    console.warn(error);
-    closeStatusCache.set(fiscalMonth, null);
-    return null;
-  }
-
-  closeStatusCache.set(fiscalMonth, data || null);
-  return data || null;
-}
-
-async function updateExpenseDateMonthHint(expenseDate) {
-  if (!expenseDateMonthHint) return;
-  const fiscalMonth = fiscalMonthFromExpenseDate(expenseDate);
-  if (!fiscalMonth) {
-    expenseDateMonthHint.hidden = true;
-    expenseDateMonthHint.textContent = "";
-    return;
-  }
-
-  const closeStatus = await getCloseStatusForExpenseDate(expenseDate);
-  if (closeStatus?.close_status === "closed") {
-    expenseDateMonthHint.hidden = false;
-    expenseDateMonthHint.textContent = `${formatMonth(fiscalMonth)} は月次締め済みです。この明細は締め後追加精算として扱われます。`;
-    return;
-  }
-
-  expenseDateMonthHint.hidden = true;
-  expenseDateMonthHint.textContent = "";
-}
-
 async function submitClaim(event) {
   event.preventDefault();
   const fd = new FormData(claimForm);
   const precheck = validateClaimBeforeSubmit(fd);
   const duplicateWarnings = await findPossibleDuplicateClaims(fd);
   precheck.warnings.push(...duplicateWarnings);
-  const closeStatus = await getCloseStatusForExpenseDate(fd.get("expenseDate"));
-  if (closeStatus?.close_status === "closed") {
-    precheck.warnings.push(`${formatMonth(closeStatus.fiscal_month)} は月次締め済みです。この明細は締め後追加精算として保存されます。`);
-  }
 
   renderClaimPrecheck(precheck);
 
@@ -2911,15 +1926,14 @@ async function submitClaim(event) {
   }
 
   if (uploadedReceiptPath && data?.id) {
-    const receiptMeta = uploadedReceiptMeta || batchReceiptItems.find((item) => item.path === uploadedReceiptPath);
     await supabase
       .schema("finance")
       .from("expense_receipts")
       .insert({
         expense_claim_id: data.id,
         storage_path: uploadedReceiptPath,
-        file_name: receiptMeta?.fileName || receiptInput.files?.[0]?.name || "",
-        mime_type: receiptMeta?.mimeType || receiptInput.files?.[0]?.type || "",
+        file_name: receiptInput.files?.[0]?.name || "",
+        mime_type: receiptInput.files?.[0]?.type || "",
       });
   }
 
@@ -2934,10 +1948,7 @@ async function submitClaim(event) {
   claimForm.reset();
   updateHighAmountReasonVisibility(0);
   uploadedReceiptPath = "";
-  uploadedReceiptMeta = null;
-  batchReceiptItems = [];
   receiptStatus.textContent = "レシート未選択";
-  renderReceiptBatchList();
   clearClaimPrecheck();
   renderLastClaimHint();
   await loadDashboard();
@@ -3164,9 +2175,7 @@ function renderClaim(row) {
         <div class="claim-meta">${escapeHtml(row.expense_date)} / ${escapeHtml(row.vendor_name_raw || "")} / ${Number(row.amount || 0).toLocaleString("ja-JP")}円</div>
         <div class="claim-meta">用途: ${escapeHtml(row.purpose || "")}</div>
         <div class="claim-meta">AI勘定科目候補: ${escapeHtml(row.ai_account_title_candidate || "未設定")} / リスク: ${escapeHtml(riskLabel(row))}</div>
-        ${renderMonthlyKindBadge(row)}
         ${renderCsvExportBadge(row.id)}
-        ${renderPasmoAuditBadge(row.id)}
         ${flags.length ? renderReviewFlags(flags) : ""}
         ${renderAuditTrail(row.id)}
       </div>
@@ -3176,29 +2185,6 @@ function renderClaim(row) {
       </div>
     </article>
   `;
-}
-
-function renderPasmoAuditBadge(expenseClaimId) {
-  const audit = pasmoAuditCache.get(expenseClaimId);
-  if (!audit) return "";
-
-  const fileName = audit.pasmo_import_batches?.source_file_name || "PASMO明細PDF";
-  const lineNo = Number(audit.line_index || 0) + 1;
-  const savedAt = audit.saved_at ? ` / ${formatDateTime(audit.saved_at)}` : "";
-  const route = audit.route || audit.raw_text || "交通費";
-
-  return `
-    <div class="pasmo-audit-badge">
-      PASMO証跡あり ${escapeHtml(fileName)} / ${lineNo}行目 / ${escapeHtml(route)}${escapeHtml(savedAt)}
-    </div>
-  `;
-}
-
-function renderMonthlyKindBadge(row) {
-  const label = monthlyReportKindLabelForClaim(row);
-  if (!label) return "";
-  const kind = monthlyReportKindForClaim(row);
-  return `<div class="monthly-kind-badge ${kind === "supplemental" ? "is-supplemental" : ""}">${escapeHtml(label)}</div>`;
 }
 
 function renderCsvExportBadge(expenseClaimId) {
@@ -3285,7 +2271,6 @@ function actionLabel(action) {
     approve: "承認",
     return: "差戻し",
     settle: "精算",
-    cancel: "取消",
   }[action] || action;
 }
 
@@ -3300,43 +2285,24 @@ function formatDateTime(value) {
 }
 
 function renderActionButtons(row) {
-  const cancelButton = renderCancelButton(row);
-
   if (row.status === "returned") {
-    return `
-      <button class="secondary" type="button" data-resubmit-id="${escapeHtml(row.id)}">再申請</button>
-      ${cancelButton}
-    `;
+    return `<button class="secondary" type="button" data-resubmit-id="${escapeHtml(row.id)}">再申請</button>`;
   }
 
-  if (!canActOnClaim(row)) return cancelButton;
+  if (!canActOnClaim(row)) return "";
 
   if (["manager_pending", "accounting_pending", "executive_pending"].includes(row.status)) {
     return `
       <button type="button" data-action="approve" data-id="${escapeHtml(row.id)}">承認</button>
       <button class="secondary" type="button" data-action="return" data-id="${escapeHtml(row.id)}">差戻し</button>
-      ${cancelButton}
     `;
   }
 
   if (row.status === "settlement_pending") {
-    return `
-      <button type="button" data-action="settle" data-id="${escapeHtml(row.id)}">精算済み</button>
-      ${cancelButton}
-    `;
+    return `<button type="button" data-action="settle" data-id="${escapeHtml(row.id)}">精算済み</button>`;
   }
 
-  return cancelButton;
-}
-
-function renderCancelButton(row) {
-  if (canCancelClaim(row)) {
-    return `<button class="secondary danger" type="button" data-cancel-claim-id="${escapeHtml(row.id)}">取消</button>`;
-  }
-
-  const reason = cancelBlockedReason(row);
-  if (!reason) return "";
-  return `<button class="secondary muted-action" type="button" disabled title="${escapeHtml(reason)}">取消不可</button><small class="action-reason">${escapeHtml(reason)}</small>`;
+  return "";
 }
 
 function riskLabel(row) {
@@ -3362,12 +2328,6 @@ function bindClaimActions() {
     button.addEventListener("click", () => {
       const claim = claimsCache.find((row) => row.id === button.dataset.resubmitId);
       if (claim) fillClaimFormForResubmit(claim);
-    });
-  });
-
-  claimList.querySelectorAll("button[data-cancel-claim-id]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      await cancelExpenseClaim(button.dataset.cancelClaimId);
     });
   });
 }
@@ -3407,7 +2367,6 @@ function workflowCommentLabel(action) {
     approve: "承認コメント",
     return: "差戻し理由",
     settle: "振込メモ",
-    cancel: "取消理由",
   }[action] || "コメント";
 }
 
@@ -3427,15 +2386,6 @@ function workflowCommentTemplates(action) {
     return [
       { label: "振込完了", value: "振込処理済み" },
       { label: "現金精算済み", value: "現金精算済み" },
-      { label: "その他", value: "" },
-    ];
-  }
-
-  if (action === "cancel") {
-    return [
-      { label: "入力ミス", value: "入力ミスのため取消" },
-      { label: "重複登録", value: "重複登録のため取消" },
-      { label: "経費対象外", value: "経費対象外のため取消" },
       { label: "その他", value: "" },
     ];
   }
@@ -3461,51 +2411,6 @@ function fillClaimFormForResubmit(claim) {
 
 function stripHighAmountReason(value) {
   return String(value || "").split(" / 高額理由:")[0].trim();
-}
-
-function canCancelClaim(claim) {
-  if (!claim || ["cancelled", "settled"].includes(claim.status)) return false;
-  if (exportedClaimCache.has(claim.id)) return false;
-  if (claim.applicant_employee_id === currentEmployee?.id && ["draft", "returned"].includes(claim.status)) return true;
-  return canUseAccountingFeatures() && ["draft", "returned", "manager_pending", "accounting_pending", "executive_pending", "settlement_pending"].includes(claim.status);
-}
-
-function cancelBlockedReason(claim) {
-  if (!claim) return "";
-  if (claim.status === "cancelled") return "すでに取消済みです";
-  if (claim.status === "settled") return "精算済みのため取消できません";
-  if (exportedClaimCache.has(claim.id)) return "CSV出力済みのため取消できません";
-  if (!["draft", "returned", "manager_pending", "accounting_pending", "executive_pending", "settlement_pending"].includes(claim.status)) {
-    return "この状態では取消できません";
-  }
-  return "権限がないため取消できません";
-}
-
-async function cancelExpenseClaim(expenseClaimId, defaultComment = "") {
-  const claim = claimsCache.find((row) => row.id === expenseClaimId);
-  if (!claim || !canCancelClaim(claim)) {
-    alert("現在の権限または状態では取消できません。");
-    return;
-  }
-
-  const comment = defaultComment || await requestWorkflowComment("cancel");
-  if (comment === null) return;
-  const label = claim.title || claim.vendor_name_raw || expenseClaimId;
-  if (!confirm(`「${label}」を取消します。\n集計・CSV対象から除外されますが、履歴は残ります。`)) return;
-
-  const { error } = await supabase
-    .schema("finance")
-    .rpc("cancel_expense_claim", {
-      p_expense_claim_id: expenseClaimId,
-      p_comment: comment,
-    });
-
-  if (error) {
-    alert(error.message);
-    return;
-  }
-
-  await refreshAll();
 }
 
 async function runMonthlyWorkflowAction(action, monthlyReportId) {
@@ -3586,7 +2491,7 @@ async function runBulkWorkflowAction(action) {
   }
 
   const skipped = selectedIds.length - targets.length;
-  const label = action === "settle" ? "精算済み" : action === "cancel" ? "取消" : "承認";
+  const label = action === "settle" ? "精算済み" : "承認";
   const message = skipped > 0
     ? `${targets.length}件を${label}します。${skipped}件は状態または権限のため対象外です。`
     : `${targets.length}件を${label}します。`;
@@ -3597,14 +2502,7 @@ async function runBulkWorkflowAction(action) {
   const errors = [];
 
   for (const claim of targets) {
-    const { error } = action === "cancel"
-      ? await supabase
-        .schema("finance")
-        .rpc("cancel_expense_claim", {
-          p_expense_claim_id: claim.id,
-          p_comment: "一括取消",
-        })
-      : action === "settle"
+    const { error } = action === "settle"
       ? await supabase
         .schema("finance")
         .rpc("settle_expense_claim", {
@@ -3637,26 +2535,7 @@ function selectedClaimIds() {
     .filter(Boolean);
 }
 
-function visibleClaimCheckboxes() {
-  return [...claimList.querySelectorAll("input[data-claim-select]")];
-}
-
-function selectVisibleClaims() {
-  const checkboxes = visibleClaimCheckboxes();
-  checkboxes.forEach((input) => {
-    input.checked = true;
-  });
-  if (!checkboxes.length) alert("表示中の明細がありません。");
-}
-
-function clearSelectedClaims() {
-  visibleClaimCheckboxes().forEach((input) => {
-    input.checked = false;
-  });
-}
-
 function canBulkActOnClaim(claim, action) {
-  if (action === "cancel") return canCancelClaim(claim);
   if (action === "settle") return claim.status === "settlement_pending" && canActOnClaim(claim);
   if (action === "approve") return ["manager_pending", "accounting_pending", "executive_pending"].includes(claim.status) && canActOnClaim(claim);
   return false;
@@ -3665,99 +2544,11 @@ function canBulkActOnClaim(claim, action) {
 function setBulkButtonsDisabled(disabled) {
   bulkApproveButton.disabled = disabled;
   bulkSettleButton.disabled = disabled;
-  if (bulkCancelButton) bulkCancelButton.disabled = disabled;
-  if (selectVisibleClaimsButton) selectVisibleClaimsButton.disabled = disabled;
-  if (clearSelectedClaimsButton) clearSelectedClaimsButton.disabled = disabled;
-}
-
-function handleCsvFilterChange() {
-  if (csvFormatFilter?.value === "yayoi_import" && csvStatusFilter?.value !== "settled") {
-    csvStatusFilter.value = "settled";
-  }
-  if (csvFormatFilter?.value === "yayoi_import" && claimStatusFilter) {
-    claimStatusFilter.value = includeExportedCsvRows?.checked ? "csv_done" : "csv_ready";
-    renderClaims();
-  }
-  renderCsvPreflight();
-}
-
-function renderCsvPreflight() {
-  if (!csvPreflight) return;
-  if (!canUseAccountingFeatures()) {
-    csvPreflight.innerHTML = `<p class="muted">経理・幹部権限で表示されます。</p>`;
-    return;
-  }
-
-  const csvFormat = csvFormatFilter?.value || "review";
-  const csvStatus = csvStatusFilter?.value || "settlement_pending";
-  const csvScope = csvScopeFilter?.value || "all";
-  const includeAlreadyExported = Boolean(includeExportedCsvRows?.checked);
-
-  const checks = [
-    {
-      label: "出力形式",
-      value: csvFormatLabel(csvFormat),
-      ok: csvFormat !== "yayoi_import" || csvStatus === "settled",
-      note: csvFormat === "yayoi_import"
-        ? "弥生取込は精算済み明細を対象にします"
-        : "確認用として内容確認に使えます",
-    },
-    {
-      label: "対象ステータス",
-      value: csvStatusLabel(csvStatus),
-      ok: csvFormat !== "yayoi_import" || csvStatus === "settled",
-      note: csvStatus === "settled"
-        ? "会計取込向けの状態です"
-        : "未精算を出す場合は確認用CSVとして扱ってください",
-    },
-    {
-      label: "対象範囲",
-      value: csvScopeLabel(csvScope) || "すべて",
-      ok: true,
-      note: csvScope === "supplemental"
-        ? "締め後追加精算だけを出力します"
-        : csvScope === "regular"
-          ? "通常精算だけを出力します"
-          : "通常精算と締め後追加精算を含みます",
-    },
-    {
-      label: "二重出力",
-      value: includeAlreadyExported ? "出力済みも含める" : "出力済みを除外",
-      ok: !includeAlreadyExported,
-      note: includeAlreadyExported
-        ? "弥生へ二重取込しないか必ず確認してください"
-        : "CSV出力履歴がある明細は除外します",
-    },
-    {
-      label: "一覧表示",
-      value: claimFilterLabel(claimStatusFilter?.value),
-      ok: csvFormat !== "yayoi_import" || ["csv_ready", "csv_done"].includes(claimStatusFilter?.value),
-      note: csvFormat === "yayoi_import"
-        ? "画面下部も弥生CSVの対象確認用に切り替えます"
-        : "表示フィルタで確認対象を切り替えられます",
-    },
-  ];
-
-  csvPreflight.innerHTML = checks.map((check) => `
-    <article class="csv-preflight-item ${check.ok ? "is-ok" : "is-warning"}">
-      <span>${escapeHtml(check.label)}</span>
-      <strong>${escapeHtml(check.value)}</strong>
-      <small>${escapeHtml(check.note)}</small>
-    </article>
-  `).join("");
 }
 
 async function exportAccountingCsv() {
   const csvFormat = csvFormatFilter?.value || "review";
   const csvStatus = csvStatusFilter?.value || "settlement_pending";
-  const csvScope = csvScopeFilter?.value || "all";
-  const includeAlreadyExported = Boolean(includeExportedCsvRows?.checked);
-
-  if (csvFormat === "yayoi_import" && csvStatus !== "settled") {
-    alert("弥生取込CSVは精算済み明細で出力してください。確認用に未精算を出す場合は、形式を確認用CSVに変更してください。");
-    return;
-  }
-
   const { data, error } = await supabase
     .schema("finance")
     .rpc("export_expense_accounting_csv", {
@@ -3769,32 +2560,21 @@ async function exportAccountingCsv() {
     return;
   }
 
-  const scopedRows = filterCsvRowsByScope(data || [], csvScope);
-  const existingExports = await loadExistingExportRecords(scopedRows);
-  const exportedClaimIds = new Set(existingExports.map((row) => row.expense_claim_id));
-  const rows = includeAlreadyExported
-    ? scopedRows
-    : scopedRows.filter((row) => !exportedClaimIds.has(row.expense_claim_id));
-
+  const rows = data || [];
   if (!rows.length) {
-    const exportedMessage = !includeAlreadyExported && scopedRows.length
-      ? "\n条件に合う明細はすべてCSV出力済みです。再出力する場合は「CSV出力済みも含める」をONにしてください。"
-      : "";
-    alert(`出力対象の明細がありません。CSVステータスと範囲を確認してください。${exportedMessage}`);
+    alert("出力対象の明細がありません。CSVステータスを確認してください。");
     return;
   }
 
-  const includedExistingExports = existingExports.filter((row) => exportedClaimIds.has(row.expense_claim_id) && includeAlreadyExported);
-  if (includedExistingExports.length) {
-    const sample = includedExistingExports.slice(0, 5).map((row) =>
+  const existingExports = await loadExistingExportRecords(rows);
+  if (existingExports.length) {
+    const sample = existingExports.slice(0, 5).map((row) =>
       `・${formatDateTime(row.last_exported_at)} ${row.last_file_name || ""}`
     ).join("\n");
-    const more = includedExistingExports.length > 5 ? `\nほか ${includedExistingExports.length - 5}件` : "";
-    if (!confirm(`このCSVには既に出力済みの明細が ${includedExistingExports.length}件 含まれています。\n二重取込にならないか確認してください。\n\n${sample}${more}\n\nこのままCSVを出力しますか？`)) {
+    const more = existingExports.length > 5 ? `\nほか ${existingExports.length - 5}件` : "";
+    if (!confirm(`このCSVには既に出力済みの明細が ${existingExports.length}件 含まれています。\n二重取込にならないか確認してください。\n\n${sample}${more}\n\nこのままCSVを出力しますか？`)) {
       return;
     }
-  } else if (!includeAlreadyExported && exportedClaimIds.size) {
-    alert(`CSV出力済みの明細 ${exportedClaimIds.size}件は除外しました。`);
   }
 
   const csv = csvFormat.startsWith("yayoi")
@@ -3804,7 +2584,7 @@ async function exportAccountingCsv() {
   const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
-  const fileName = `${csvFilePrefix(csvFormat)}_${csvStatus}_${csvScopeFileSuffix(csvScope)}_${formatFileDate(new Date())}.csv`;
+  const fileName = `${csvFilePrefix(csvFormat)}_${csvStatus}_${formatFileDate(new Date())}.csv`;
   link.href = url;
   link.download = fileName;
   link.click();
@@ -3812,30 +2592,11 @@ async function exportAccountingCsv() {
 
   await recordAccountingExport({
     csvFormat,
-    csvStatus: `${csvStatus}:${csvScope}`,
+    csvStatus,
     fileName,
     rows,
   });
   await loadAccountingExportHistory();
-}
-
-function filterCsvRowsByScope(rows, csvScope) {
-  if (csvScope === "all") return rows;
-
-  const byClaimId = new Map(claimsCache.map((claim) => [claim.id, claim]));
-  return rows.filter((row) => {
-    const claim = byClaimId.get(row.expense_claim_id);
-    if (!claim) return false;
-    return monthlyReportKindForClaim(claim) === csvScope;
-  });
-}
-
-function csvScopeFileSuffix(csvScope) {
-  return {
-    all: "all",
-    regular: "regular",
-    supplemental: "supplemental",
-  }[csvScope] || "all";
 }
 
 async function loadExistingExportRecords(rows) {
@@ -3879,7 +2640,7 @@ async function recordAccountingExport({ csvFormat, csvStatus, fileName, rows }) 
 
 async function loadAccountingExportHistory() {
   if (!accountingExportHistory || !currentEmployee) return;
-  if (!canUseAccountingFeatures()) {
+  if (!hasRole(currentEmployee, "accounting") && !hasRole(currentEmployee, "executive")) {
     accountingExportHistory.innerHTML = `<p class="muted">経理権限で表示されます。</p>`;
     return;
   }
@@ -3927,43 +2688,11 @@ function csvFormatLabel(format) {
 }
 
 function csvStatusLabel(status) {
-  const [baseStatus, scope] = String(status || "").split(":");
-  const statusText = {
+  return {
     settlement_pending: "精算待ち",
     settled: "精算済み",
     all: "全件",
-  }[baseStatus] || baseStatus || "";
-  const scopeText = csvScopeLabel(scope);
-  return scopeText ? `${statusText} / ${scopeText}` : statusText;
-}
-
-function csvScopeLabel(scope) {
-  return {
-    regular: "通常精算のみ",
-    supplemental: "締め後追加精算のみ",
-    all: "すべて",
-  }[scope] || "";
-}
-
-function claimFilterLabel(filter) {
-  return {
-    all: "すべて",
-    ai_review: "AI要確認",
-    csv_unexported: "CSV未出力",
-    csv_exported: "CSV出力済み",
-    csv_ready: "弥生取込対象",
-    csv_done: "弥生出力済み",
-    cancellable: "取消できる明細",
-    cancelled: "取消済み",
-    regular_monthly: "通常精算",
-    supplemental_monthly: "締め後追加精算",
-    actionable: "自分の確認待ち",
-    manager_pending: "店長承認待ち",
-    accounting_pending: "経理確認待ち",
-    settlement_pending: "精算待ち",
-    returned: "差戻し",
-    settled: "精算済み",
-  }[filter] || filter || "";
+  }[status] || status || "";
 }
 
 function buildReviewCsv(rows) {
@@ -4132,7 +2861,6 @@ function statusLabel(status) {
     returned: "差戻し",
     settlement_pending: "精算待ち",
     settled: "精算済み",
-    cancelled: "取消済み",
   }[status] || status;
 }
 
