@@ -1,10 +1,23 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  createCancelClaimAdapter,
+  safeCancelMessage,
+} from "./expense-cancel-claim-adapter.js";
 
 const SUPABASE_URL = window.NOV_SUPABASE_URL || "";
 const SUPABASE_ANON_KEY = window.NOV_SUPABASE_ANON_KEY || "";
 const PASMO_IMPORT_AUDIT_ENABLED = false;
 const MONTHLY_CLOSE_EDGE_WRAPPER_ENABLED = false;
+const EXPENSE_CANCEL_EDGE_ENABLED = false;
 let supabase = null;
+const cancelClaimViaEdge = createCancelClaimAdapter({
+  endpoint: `${SUPABASE_URL}/functions/v1/expense-cancel-claim`,
+  getAccessToken: async () => {
+    if (!supabase) return "";
+    const { data } = await supabase.auth.getSession();
+    return data?.session?.access_token || "";
+  },
+});
 
 const claimList = document.querySelector("#claimList");
 const claimForm = document.querySelector("#claimForm");
@@ -128,7 +141,10 @@ includeExportedCsvRows?.addEventListener("change", handleCsvFilterChange);
 claimStatusFilter.addEventListener("change", renderClaims);
 bulkApproveButton.addEventListener("click", () => runBulkWorkflowAction("approve"));
 bulkSettleButton.addEventListener("click", () => runBulkWorkflowAction("settle"));
-bulkCancelButton?.addEventListener("click", () => runBulkWorkflowAction("cancel"));
+if (bulkCancelButton) {
+  bulkCancelButton.disabled = true;
+  bulkCancelButton.title = "一括取消は安全なEdge経路への切替確認中です";
+}
 selectVisibleClaimsButton?.addEventListener("click", selectVisibleClaims);
 clearSelectedClaimsButton?.addEventListener("click", clearSelectedClaims);
 markNotificationsReadButton.addEventListener("click", markNotificationsRead);
@@ -3433,6 +3449,10 @@ function renderActionButtons(row) {
 
 function renderCancelButton(row) {
   if (canCancelClaim(row)) {
+    if (!EXPENSE_CANCEL_EDGE_ENABLED) {
+      const reason = "取消は安全なEdge経路への切替確認中です";
+      return `<button class="secondary muted-action" type="button" disabled title="${escapeHtml(reason)}">取消停止中</button><small class="action-reason">${escapeHtml(reason)}</small>`;
+    }
     return `<button class="secondary danger" type="button" data-cancel-claim-id="${escapeHtml(row.id)}">取消</button>`;
   }
 
@@ -3469,7 +3489,7 @@ function bindClaimActions() {
 
   claimList.querySelectorAll("button[data-cancel-claim-id]").forEach((button) => {
     button.addEventListener("click", async () => {
-      await cancelExpenseClaim(button.dataset.cancelClaimId);
+      await cancelExpenseClaim(button.dataset.cancelClaimId, "", button);
     });
   });
 }
@@ -3583,10 +3603,15 @@ function cancelBlockedReason(claim) {
   return "権限がないため取消できません";
 }
 
-async function cancelExpenseClaim(expenseClaimId, defaultComment = "") {
+async function cancelExpenseClaim(expenseClaimId, defaultComment = "", triggerButton = null) {
   const claim = claimsCache.find((row) => row.id === expenseClaimId);
   if (!claim || !canCancelClaim(claim)) {
     alert("現在の権限または状態では取消できません。");
+    return;
+  }
+
+  if (!EXPENSE_CANCEL_EDGE_ENABLED) {
+    alert("取消は現在、安全なEdge経路への切替確認中です。");
     return;
   }
 
@@ -3595,19 +3620,32 @@ async function cancelExpenseClaim(expenseClaimId, defaultComment = "") {
   const label = claim.title || claim.vendor_name_raw || expenseClaimId;
   if (!confirm(`「${label}」を取消します。\n集計・CSV対象から除外されますが、履歴は残ります。`)) return;
 
-  const { error } = await supabase
-    .schema("finance")
-    .rpc("cancel_expense_claim", {
-      p_expense_claim_id: expenseClaimId,
-      p_comment: comment,
-    });
-
-  if (error) {
-    alert(error.message);
-    return;
+  const originalLabel = triggerButton?.textContent || "取消";
+  if (triggerButton) {
+    triggerButton.disabled = true;
+    triggerButton.setAttribute("aria-busy", "true");
+    triggerButton.textContent = "取消処理中...";
   }
 
-  await refreshAll();
+  try {
+    await cancelClaimViaEdge({
+      claimId: expenseClaimId,
+      reason: comment,
+      clientConfirmation: true,
+    });
+  } catch (error) {
+    alert(error?.userMessage || safeCancelMessage(error?.safeCode, error?.status));
+    return;
+  } finally {
+    if (triggerButton?.isConnected) {
+      triggerButton.disabled = false;
+      triggerButton.removeAttribute("aria-busy");
+      triggerButton.textContent = originalLabel;
+    }
+  }
+
+  await loadClaims();
+  alert("明細を取り消しました。");
 }
 
 async function runMonthlyWorkflowAction(action, monthlyReportId) {
@@ -3671,6 +3709,11 @@ async function runWorkflowAction(action, expenseClaimId, comment) {
 }
 
 async function runBulkWorkflowAction(action) {
+  if (action === "cancel") {
+    alert("一括取消は現在、安全なEdge経路への切替確認中です。");
+    return;
+  }
+
   const selectedIds = selectedClaimIds();
   if (!selectedIds.length) {
     alert("対象の申請を選択してください。");
@@ -3688,7 +3731,7 @@ async function runBulkWorkflowAction(action) {
   }
 
   const skipped = selectedIds.length - targets.length;
-  const label = action === "settle" ? "精算済み" : action === "cancel" ? "取消" : "承認";
+  const label = action === "settle" ? "精算済み" : "承認";
   const message = skipped > 0
     ? `${targets.length}件を${label}します。${skipped}件は状態または権限のため対象外です。`
     : `${targets.length}件を${label}します。`;
@@ -3699,14 +3742,7 @@ async function runBulkWorkflowAction(action) {
   const errors = [];
 
   for (const claim of targets) {
-    const { error } = action === "cancel"
-      ? await supabase
-        .schema("finance")
-        .rpc("cancel_expense_claim", {
-          p_expense_claim_id: claim.id,
-          p_comment: "一括取消",
-        })
-      : action === "settle"
+    const { error } = action === "settle"
       ? await supabase
         .schema("finance")
         .rpc("settle_expense_claim", {
@@ -3758,7 +3794,7 @@ function clearSelectedClaims() {
 }
 
 function canBulkActOnClaim(claim, action) {
-  if (action === "cancel") return canCancelClaim(claim);
+  if (action === "cancel") return false;
   if (action === "settle") return claim.status === "settlement_pending" && canActOnClaim(claim);
   if (action === "approve") return ["manager_pending", "accounting_pending", "executive_pending"].includes(claim.status) && canActOnClaim(claim);
   return false;
@@ -3767,7 +3803,7 @@ function canBulkActOnClaim(claim, action) {
 function setBulkButtonsDisabled(disabled) {
   bulkApproveButton.disabled = disabled;
   bulkSettleButton.disabled = disabled;
-  if (bulkCancelButton) bulkCancelButton.disabled = disabled;
+  if (bulkCancelButton) bulkCancelButton.disabled = true;
   if (selectVisibleClaimsButton) selectVisibleClaimsButton.disabled = disabled;
   if (clearSelectedClaimsButton) clearSelectedClaimsButton.disabled = disabled;
 }
